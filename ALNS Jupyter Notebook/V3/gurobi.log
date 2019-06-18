@@ -1,0 +1,547 @@
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 02:20:10
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 02:20:44
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 02:21:26
+
+Academic license - for non-commercial use only
+Optimize a model with 202 rows, 173 columns and 361 nonzeros
+Model has 32 quadratic objective terms
+Model has 1 general constraint
+Variable types: 173 continuous, 0 integer (0 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [1e+00, 1e+00]
+  QObjective range [2e+00, 2e+00]
+  Bounds range     [3e+01, 1e+02]
+  RHS range        [2e+00, 8e+02]
+Presolve removed 28 rows and 30 columns
+Presolve time: 0.00s
+
+Explored 0 nodes (0 simplex iterations) in 0.01 seconds
+Thread count was 1 (of 12 available processors)
+
+Solution count 0
+
+Model is infeasible or unbounded
+Best objective -, best bound -, gap -
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 02:22:03
+
+Academic license - for non-commercial use only
+Optimize a model with 202 rows, 173 columns and 361 nonzeros
+Model has 32 quadratic objective terms
+Model has 1 general constraint
+Variable types: 173 continuous, 0 integer (0 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [1e+00, 1e+00]
+  QObjective range [2e+00, 2e+00]
+  Bounds range     [3e+01, 1e+02]
+  RHS range        [2e+00, 8e+02]
+Presolve removed 28 rows and 30 columns
+Presolve time: 0.00s
+
+Explored 0 nodes (0 simplex iterations) in 0.01 seconds
+Thread count was 1 (of 12 available processors)
+
+Solution count 0
+
+Model is infeasible or unbounded
+Best objective -, best bound -, gap -
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 02:24:12
+
+Academic license - for non-commercial use only
+Optimize a model with 52 rows, 48 columns and 90 nonzeros
+Model has 12 quadratic objective terms
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [1e+00, 1e+00]
+  QObjective range [2e+00, 2e+00]
+  Bounds range     [3e+01, 1e+02]
+  RHS range        [2e+00, 3e+02]
+Presolve removed 40 rows and 34 columns
+Presolve time: 0.01s
+Presolved: 12 rows, 14 columns, 24 nonzeros
+Presolved model has 6 quadratic objective terms
+Ordering time: 0.00s
+
+Barrier statistics:
+ AA' NZ     : 1.200e+01
+ Factor NZ  : 4.200e+01
+ Factor Ops : 1.820e+02 (less than 1 second per iteration)
+ Threads    : 1
+
+                  Objective                Residual
+Iter       Primal          Dual         Primal    Dual     Compl     Time
+   0   1.48994134e+06 -1.47524208e+06  9.38e+02 1.60e+01  9.98e+05     0s
+   1   7.22092058e+05 -8.51125155e+05  1.06e+02 0.00e+00  1.08e+05     0s
+   2   1.31148878e+05 -1.79731200e+05  4.44e-15 0.00e+00  1.24e+04     0s
+   3   1.74915799e+04 -2.17759210e+04  8.88e-16 0.00e+00  1.57e+03     0s
+   4   2.43353408e+03 -8.49453875e+02  8.88e-16 8.53e-14  1.31e+02     0s
+   5   1.33135313e+03  5.74968466e+02  1.69e-14 2.13e-14  3.03e+01     0s
+   6   1.09423173e+03  1.03768624e+03  1.78e-15 1.14e-13  2.26e+00     0s
+   7   1.07064496e+03  1.06510579e+03  8.88e-16 8.44e-15  2.22e-01     0s
+   8   1.06836438e+03  1.06767730e+03  2.66e-15 4.92e-14  2.75e-02     0s
+   9   1.06807208e+03  1.06797371e+03  8.88e-16 1.21e-14  3.94e-03     0s
+  10   1.06803013e+03  1.06801627e+03  8.88e-16 1.14e-13  5.54e-04     0s
+  11   1.06802422e+03  1.06802226e+03  5.33e-15 3.11e-14  7.83e-05     0s
+  12   1.06802338e+03  1.06802311e+03  0.00e+00 1.14e-13  1.11e-05     0s
+  13   1.06802326e+03  1.06802322e+03  8.88e-16 5.02e-14  1.56e-06     0s
+  14   1.06802325e+03  1.06802324e+03  1.78e-15 1.14e-13  2.21e-07     0s
+  15   1.06802324e+03  1.06802324e+03  8.88e-16 2.84e-14  3.12e-08     0s
+  16   1.06802324e+03  1.06802324e+03  1.78e-15 2.73e-14  4.40e-09     0s
+
+Barrier solved model in 16 iterations and 0.03 seconds
+Optimal objective 1.06802324e+03
+
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 02:27:31
+
+Academic license - for non-commercial use only
+Parameter OutputFlag unchanged
+   Value: 1  Min: 0  Max: 1  Default: 1
+Optimize a model with 52 rows, 48 columns and 90 nonzeros
+Model has 12 quadratic objective terms
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [1e+00, 1e+00]
+  QObjective range [2e+00, 2e+00]
+  Bounds range     [3e+01, 1e+02]
+  RHS range        [2e+00, 3e+02]
+Presolve removed 40 rows and 34 columns
+Presolve time: 0.00s
+Presolved: 12 rows, 14 columns, 24 nonzeros
+Presolved model has 6 quadratic objective terms
+Ordering time: 0.00s
+
+Barrier statistics:
+ AA' NZ     : 1.200e+01
+ Factor NZ  : 4.200e+01
+ Factor Ops : 1.820e+02 (less than 1 second per iteration)
+ Threads    : 1
+
+                  Objective                Residual
+Iter       Primal          Dual         Primal    Dual     Compl     Time
+   0   1.48994134e+06 -1.47524208e+06  9.38e+02 1.60e+01  9.98e+05     0s
+   1   7.22092058e+05 -8.51125155e+05  1.06e+02 0.00e+00  1.08e+05     0s
+   2   1.31148878e+05 -1.79731200e+05  4.44e-15 0.00e+00  1.24e+04     0s
+   3   1.74915799e+04 -2.17759210e+04  8.88e-16 0.00e+00  1.57e+03     0s
+   4   2.43353408e+03 -8.49453875e+02  8.88e-16 8.53e-14  1.31e+02     0s
+   5   1.33135313e+03  5.74968466e+02  1.69e-14 2.13e-14  3.03e+01     0s
+   6   1.09423173e+03  1.03768624e+03  1.78e-15 1.14e-13  2.26e+00     0s
+   7   1.07064496e+03  1.06510579e+03  8.88e-16 8.44e-15  2.22e-01     0s
+   8   1.06836438e+03  1.06767730e+03  2.66e-15 4.92e-14  2.75e-02     0s
+   9   1.06807208e+03  1.06797371e+03  8.88e-16 1.21e-14  3.94e-03     0s
+  10   1.06803013e+03  1.06801627e+03  8.88e-16 1.14e-13  5.54e-04     0s
+  11   1.06802422e+03  1.06802226e+03  5.33e-15 3.11e-14  7.83e-05     0s
+  12   1.06802338e+03  1.06802311e+03  0.00e+00 1.14e-13  1.11e-05     0s
+  13   1.06802326e+03  1.06802322e+03  8.88e-16 5.02e-14  1.56e-06     0s
+  14   1.06802325e+03  1.06802324e+03  1.78e-15 1.14e-13  2.21e-07     0s
+  15   1.06802324e+03  1.06802324e+03  8.88e-16 2.84e-14  3.12e-08     0s
+  16   1.06802324e+03  1.06802324e+03  1.78e-15 2.73e-14  4.40e-09     0s
+
+Barrier solved model in 16 iterations and 0.02 seconds
+Optimal objective 1.06802324e+03
+
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 02:31:36
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 02:35:42
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 02:36:10
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 11:47:45
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 12:07:11
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 12:28:57
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 13:01:48
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 13:04:54
+
+Academic license - for non-commercial use only
+Parameter OutputFlag unchanged
+   Value: 1  Min: 0  Max: 1  Default: 1
+Parameter OutputFlag unchanged
+   Value: 1  Min: 0  Max: 1  Default: 1
+Parameter OutputFlag unchanged
+   Value: 1  Min: 0  Max: 1  Default: 1
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 13:18:47
+
+Academic license - for non-commercial use only
+Parameter OutputFlag unchanged
+   Value: 1  Min: 0  Max: 1  Default: 1
+Optimize a model with 198 rows, 168 columns and 352 nonzeros
+Model has 32 quadratic objective terms
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [1e+00, 1e+00]
+  QObjective range [2e+00, 2e+00]
+  Bounds range     [3e+01, 1e+02]
+  RHS range        [9e-01, 8e+02]
+Presolve removed 147 rows and 123 columns
+Presolve time: 0.01s
+Presolved: 51 rows, 45 columns, 102 nonzeros
+Presolved model has 16 quadratic objective terms
+Ordering time: 0.00s
+
+Barrier statistics:
+ AA' NZ     : 9.200e+01
+ Factor NZ  : 4.660e+02
+ Factor Ops : 5.174e+03 (less than 1 second per iteration)
+ Threads    : 1
+
+                  Objective                Residual
+Iter       Primal          Dual         Primal    Dual     Compl     Time
+   0   3.54128953e+06 -3.44998952e+06  9.42e+02 1.60e+01  9.91e+05     0s
+   1   2.28846582e+06 -4.00493380e+06  2.27e+02 0.00e+00  1.67e+05     0s
+   2   4.97797856e+05 -1.09388431e+06  1.35e+01 0.00e+00  2.16e+04     0s
+   3   8.77517268e+04 -2.04180364e+05  4.39e-01 0.00e+00  3.20e+03     0s
+   4   1.19867265e+04 -1.85409259e+04  2.89e-03 0.00e+00  3.26e+02     0s
+   5   4.44635992e+03 -1.53540500e+03  4.20e-04 0.00e+00  6.37e+01     0s
+   6   2.67750806e+03  1.25797249e+03  4.15e-10 0.00e+00  1.51e+01     0s
+   7   2.30103971e+03  1.96659891e+03  4.55e-13 0.00e+00  3.56e+00     0s
+   8   2.21215686e+03  2.17113899e+03  7.96e-13 0.00e+00  4.36e-01     0s
+   9   2.20044163e+03  2.19660945e+03  1.25e-12 4.45e-15  4.08e-02     0s
+  10   2.19919693e+03  2.19901691e+03  5.68e-13 2.89e-15  1.92e-03     0s
+  11   2.19912514e+03  2.19909995e+03  6.82e-13 1.14e-13  2.68e-04     0s
+  12   2.19911467e+03  2.19911112e+03  7.96e-13 2.27e-13  3.78e-05     0s
+  13   2.19911320e+03  2.19911270e+03  5.68e-13 2.78e-14  5.34e-06     0s
+  14   2.19911299e+03  2.19911292e+03  1.02e-12 7.25e-14  7.53e-07     0s
+  15   2.19911296e+03  2.19911295e+03  1.78e-15 1.66e-14  1.06e-07     0s
+  16   2.19911295e+03  2.19911295e+03  1.14e-13 1.14e-13  1.50e-08     0s
+  17   2.19911295e+03  2.19911295e+03  1.78e-15 2.27e-13  2.12e-09     0s
+
+Barrier solved model in 17 iterations and 0.05 seconds
+Optimal objective 2.19911295e+03
+
+Parameter OutputFlag unchanged
+   Value: 1  Min: 0  Max: 1  Default: 1
+Optimize a model with 198 rows, 168 columns and 352 nonzeros
+Model has 32 quadratic objective terms
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [1e+00, 1e+00]
+  QObjective range [2e+00, 2e+00]
+  Bounds range     [3e+01, 1e+02]
+  RHS range        [9e-01, 8e+02]
+Presolve removed 147 rows and 123 columns
+Presolve time: 0.01s
+Presolved: 51 rows, 45 columns, 102 nonzeros
+Presolved model has 16 quadratic objective terms
+Ordering time: 0.00s
+
+Barrier statistics:
+ AA' NZ     : 9.200e+01
+ Factor NZ  : 4.660e+02
+ Factor Ops : 5.174e+03 (less than 1 second per iteration)
+ Threads    : 1
+
+                  Objective                Residual
+Iter       Primal          Dual         Primal    Dual     Compl     Time
+   0   3.54128953e+06 -3.44998952e+06  9.42e+02 1.60e+01  9.91e+05     0s
+   1   2.28846582e+06 -4.00493380e+06  2.27e+02 0.00e+00  1.67e+05     0s
+   2   4.97797856e+05 -1.09388431e+06  1.35e+01 0.00e+00  2.16e+04     0s
+   3   8.77517268e+04 -2.04180364e+05  4.39e-01 0.00e+00  3.20e+03     0s
+   4   1.19867265e+04 -1.85409259e+04  2.89e-03 0.00e+00  3.26e+02     0s
+   5   4.44635992e+03 -1.53540500e+03  4.20e-04 0.00e+00  6.37e+01     0s
+   6   2.67750806e+03  1.25797249e+03  4.15e-10 0.00e+00  1.51e+01     0s
+   7   2.30103971e+03  1.96659891e+03  4.55e-13 0.00e+00  3.56e+00     0s
+   8   2.21215686e+03  2.17113899e+03  7.96e-13 0.00e+00  4.36e-01     0s
+   9   2.20044163e+03  2.19660945e+03  1.25e-12 4.45e-15  4.08e-02     0s
+  10   2.19919693e+03  2.19901691e+03  5.68e-13 2.89e-15  1.92e-03     0s
+  11   2.19912514e+03  2.19909995e+03  6.82e-13 1.14e-13  2.68e-04     0s
+  12   2.19911467e+03  2.19911112e+03  7.96e-13 2.27e-13  3.78e-05     0s
+  13   2.19911320e+03  2.19911270e+03  5.68e-13 2.78e-14  5.34e-06     0s
+  14   2.19911299e+03  2.19911292e+03  1.02e-12 7.25e-14  7.53e-07     0s
+  15   2.19911296e+03  2.19911295e+03  1.78e-15 1.66e-14  1.06e-07     0s
+  16   2.19911295e+03  2.19911295e+03  1.14e-13 1.14e-13  1.50e-08     0s
+  17   2.19911295e+03  2.19911295e+03  1.78e-15 2.27e-13  2.12e-09     0s
+
+Barrier solved model in 17 iterations and 0.02 seconds
+Optimal objective 2.19911295e+03
+
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 13:20:19
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 14:10:35
+
+Academic license - for non-commercial use only
+Parameter OutputFlag unchanged
+   Value: 1  Min: 0  Max: 1  Default: 1
+Optimize a model with 52 rows, 48 columns and 90 nonzeros
+Model has 12 quadratic objective terms
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [1e+00, 1e+00]
+  QObjective range [2e+00, 2e+00]
+  Bounds range     [3e+01, 1e+02]
+  RHS range        [2e+00, 3e+02]
+Presolve removed 40 rows and 34 columns
+Presolve time: 0.01s
+Presolved: 12 rows, 14 columns, 24 nonzeros
+Presolved model has 6 quadratic objective terms
+Ordering time: 0.00s
+
+Barrier statistics:
+ AA' NZ     : 1.200e+01
+ Factor NZ  : 4.200e+01
+ Factor Ops : 1.820e+02 (less than 1 second per iteration)
+ Threads    : 1
+
+                  Objective                Residual
+Iter       Primal          Dual         Primal    Dual     Compl     Time
+   0   1.48994134e+06 -1.47524208e+06  9.38e+02 1.60e+01  9.98e+05     0s
+   1   7.22092058e+05 -8.51125155e+05  1.06e+02 0.00e+00  1.08e+05     0s
+   2   1.31148878e+05 -1.79731200e+05  4.44e-15 0.00e+00  1.24e+04     0s
+   3   1.74915799e+04 -2.17759210e+04  8.88e-16 0.00e+00  1.57e+03     0s
+   4   2.43353408e+03 -8.49453875e+02  8.88e-16 8.53e-14  1.31e+02     0s
+   5   1.33135313e+03  5.74968466e+02  1.69e-14 2.13e-14  3.03e+01     0s
+   6   1.09423173e+03  1.03768624e+03  1.78e-15 1.14e-13  2.26e+00     0s
+   7   1.07064496e+03  1.06510579e+03  8.88e-16 8.44e-15  2.22e-01     0s
+   8   1.06836438e+03  1.06767730e+03  2.66e-15 4.92e-14  2.75e-02     0s
+   9   1.06807208e+03  1.06797371e+03  8.88e-16 1.21e-14  3.94e-03     0s
+  10   1.06803013e+03  1.06801627e+03  8.88e-16 1.14e-13  5.54e-04     0s
+  11   1.06802422e+03  1.06802226e+03  5.33e-15 3.11e-14  7.83e-05     0s
+  12   1.06802338e+03  1.06802311e+03  0.00e+00 1.14e-13  1.11e-05     0s
+  13   1.06802326e+03  1.06802322e+03  8.88e-16 5.02e-14  1.56e-06     0s
+  14   1.06802325e+03  1.06802324e+03  1.78e-15 1.14e-13  2.21e-07     0s
+  15   1.06802324e+03  1.06802324e+03  8.88e-16 2.84e-14  3.12e-08     0s
+  16   1.06802324e+03  1.06802324e+03  1.78e-15 2.73e-14  4.40e-09     0s
+
+Barrier solved model in 16 iterations and 0.02 seconds
+Optimal objective 1.06802324e+03
+
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 16:22:49
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 19:33:04
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/06/19 22:06:56
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/07/19 09:26:19
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/07/19 18:06:25
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/07/19 23:42:28
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/10/19 19:29:39
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/11/19 08:53:32
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/11/19 09:31:22
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/11/19 09:35:04
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/11/19 09:43:02
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/12/19 00:59:47
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/12/19 10:13:19
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 09:40:38
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 10:14:08
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 10:15:22
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 10:15:53
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 10:26:40
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 10:36:56
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 10:39:13
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 10:39:55
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 13:05:35
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 13:10:15
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 13:11:46
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 14:00:00
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 14:00:14
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 15:13:19
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 16:33:24
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 18:01:21
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 20:12:44
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/13/19 22:32:35
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 02:50:07
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:04:41
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:12:02
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:14:24
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:18:43
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:21:53
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:29:31
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:33:56
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:34:22
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:34:53
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:37:29
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:45:31
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:47:54
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:50:17
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:50:54
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:51:34
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:52:35
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 03:54:13
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 04:33:33
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/14/19 09:43:33
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/17/19 13:57:38
+
+Academic license - for non-commercial use only
