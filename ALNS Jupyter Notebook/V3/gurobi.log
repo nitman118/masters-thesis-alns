@@ -585,3 +585,118 @@ Academic license - for non-commercial use only
 Gurobi 8.1.1 (win64, Python) logging started 06/20/19 23:39:08
 
 Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/21/19 09:49:11
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/21/19 10:53:08
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/21/19 11:23:11
+
+Academic license - for non-commercial use only
+
+Gurobi 8.1.1 (win64, Python) logging started 06/21/19 11:31:17
+
+Academic license - for non-commercial use only
+Parameter OutputFlag unchanged
+   Value: 1  Min: 0  Max: 1  Default: 1
+Optimize a model with 225 rows, 198 columns and 412 nonzeros
+Model has 48 quadratic objective terms
+Model has 6 general constraints
+Variable types: 198 continuous, 0 integer (0 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [0e+00, 0e+00]
+  QObjective range [2e+00, 2e+00]
+  Bounds range     [3e+01, 1e+02]
+  RHS range        [2e+00, 6e+02]
+Presolve removed 183 rows and 159 columns
+Presolve time: 0.00s
+Presolved: 42 rows, 39 columns, 94 nonzeros
+Presolved model has 3 SOS constraint(s)
+Presolved model has 17 quadratic objective terms
+Variable types: 36 continuous, 3 integer (3 binary)
+
+Root relaxation: infeasible, 43 iterations, 0.00 seconds
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 infeasible    0               - infeasible      -     -    0s
+
+Explored 0 nodes (43 simplex iterations) in 0.02 seconds
+Thread count was 12 (of 12 available processors)
+
+Solution count 0
+
+Model is infeasible or unbounded
+Best objective -, best bound -, gap -
+Parameter OutputFlag unchanged
+   Value: 1  Min: 0  Max: 1  Default: 1
+Optimize a model with 225 rows, 198 columns and 412 nonzeros
+Model has 48 quadratic objective terms
+Model has 6 general constraints
+Variable types: 198 continuous, 0 integer (0 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [0e+00, 0e+00]
+  QObjective range [2e+00, 2e+00]
+  Bounds range     [3e+01, 1e+02]
+  RHS range        [2e+00, 6e+02]
+Presolve removed 183 rows and 159 columns
+Presolve time: 0.00s
+Presolved: 42 rows, 39 columns, 94 nonzeros
+Presolved model has 3 SOS constraint(s)
+Presolved model has 17 quadratic objective terms
+Variable types: 36 continuous, 3 integer (3 binary)
+
+Root relaxation: infeasible, 43 iterations, 0.00 seconds
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 infeasible    0               - infeasible      -     -    0s
+
+Explored 0 nodes (43 simplex iterations) in 0.02 seconds
+Thread count was 12 (of 12 available processors)
+
+Solution count 0
+
+Model is infeasible or unbounded
+Best objective -, best bound -, gap -
+Parameter OutputFlag unchanged
+   Value: 1  Min: 0  Max: 1  Default: 1
+Optimize a model with 225 rows, 198 columns and 412 nonzeros
+Model has 48 quadratic objective terms
+Model has 6 general constraints
+Variable types: 198 continuous, 0 integer (0 binary)
+Coefficient statistics:
+  Matrix range     [1e+00, 1e+00]
+  Objective range  [0e+00, 0e+00]
+  QObjective range [2e+00, 2e+00]
+  Bounds range     [3e+01, 1e+02]
+  RHS range        [2e+00, 6e+02]
+Presolve removed 183 rows and 159 columns
+Presolve time: 0.00s
+Presolved: 42 rows, 39 columns, 94 nonzeros
+Presolved model has 3 SOS constraint(s)
+Presolved model has 17 quadratic objective terms
+Variable types: 36 continuous, 3 integer (3 binary)
+
+Root relaxation: infeasible, 43 iterations, 0.00 seconds
+
+    Nodes    |    Current Node    |     Objective Bounds      |     Work
+ Expl Unexpl |  Obj  Depth IntInf | Incumbent    BestBd   Gap | It/Node Time
+
+     0     0 infeasible    0               - infeasible      -     -    0s
+
+Explored 0 nodes (43 simplex iterations) in 0.02 seconds
+Thread count was 12 (of 12 available processors)
+
+Solution count 0
+
+Model is infeasible or unbounded
+Best objective -, best bound -, gap -
