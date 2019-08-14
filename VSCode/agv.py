@@ -14,7 +14,7 @@ class AGV():
         self.state = 'N'
     
     def __repr__(self):
-        return f"{self.agvId}-{self.speed}m/s-{self.charge}%-{self.travelCost}"
+        return f"{self.agvId}-{self.speed}m/s-{self.charge}%-{self.travelCost}-{self.UPPER_THRESHOLD}%"
     
     def getSpeed(self):
         '''
@@ -33,4 +33,8 @@ class AGV():
         Returns discharging rate of agv in %/sec
         '''
         return self.dischargeRate
+    
+    def getInitialCharge(self):
+        ''' returns agv initial charge'''
+        return self.charge
     

@@ -8,7 +8,7 @@ import functools # for reduce
 from gurobipy import *
 import random 
 import copy # to deep copy from taskSequence to taskSchedule
-from time import *
+from time import perf_counter
 #OBJECT IMPORTS
 from agv import AGV
 from layout import Layout
@@ -18,8 +18,8 @@ from stationDandR import ALNSStationDestroyAndRepairMethods
 from customerDandR import ALNSCustomerDestroyAndRepairMethods
 
 class Scheduler():
-    
-    def __init__(self, layoutFile, agvFile, requestFile, stationFile):
+    def __init__(self, layoutFile, agvFile, requestFile, stationFile, hyperparams=None):
+        self.hyperparams=hyperparams
         self.agvs =[] # field responsible to keep track of agvs
         self.agvsInfo=dict() # field to keep track of agv charge, location etc...
         self.stations=[] # field responsible to keep track of stations
@@ -36,14 +36,12 @@ class Scheduler():
         self.createStations(stationFile=stationFile)
         self.createRequests(requestFile=requestFile)
         self.setAGVInfo() # create a JSON like agv information object
-        self.stationALNSMethods = ALNSStationDestroyAndRepairMethods() # instantiating ALNS repair method class
+        self.stationALNSMethods = ALNSStationDestroyAndRepairMethods(self) # instantiating ALNS repair method class
         self.setNearestChargeLocation() # keep a dictionary of from to relationship b/w source station to charging stations
         self.customerALNSMethods = ALNSCustomerDestroyAndRepairMethods(self)
-        #DEBUG - REMOVE LATER
-        self.tlLength = list()
-        self.temp=list()
         
         
+
     def setAGVInfo(self):
         '''
         Keeps a record of agv location charge etc.
@@ -108,6 +106,8 @@ class Scheduler():
     def getStartNode(self,agv):
         '''
         Returns agv's initial/start node'''
+        if type(agv)==int:
+            agv = self.getAgvById(agv)
         return self.agvsInfo.get(agv.agvId)['startNode']
         
         
@@ -130,7 +130,7 @@ class Scheduler():
             self.agvs.append(agv)
         for agv in self.agvs:
             safety_charge = (self.layout.getMaxDistance()/agv.speed)*agv.dischargeRate
-            agv.LOWER_THRESHOLD+=safety_charge # to ensure feasibility of LP
+            agv.LOWER_THRESHOLD+=safety_charge # to ensure feasibility of LP, may not be required though
 
             
     def createStations(self, stationFile):
@@ -154,7 +154,7 @@ class Scheduler():
         ldts=[]
         for index,row in df.iterrows():
             transportOrder = TransportOrder(taskId=row['Id'], taskType='TO', source=row['source'],\
-                                            dest= row['target'],ept= row['ept'], ldt=row['ldt'], cap=row['capability'])
+                                            dest= row['target'],ept= row['ept'], ldt=row['ldt'], cap=row['capability'], requestCost = row['requestCost'])
             self.transportOrders.append(transportOrder)
             epts.append(row['ept'])
             ldts.append(row['ldt'])
@@ -178,8 +178,20 @@ class Scheduler():
         returns normalized ept
         '''
         return self.normalizedT.get(task.taskId)[1]
+    
+    def getAgvById(self,agvId):
+        '''
+        returns agv object by id
+        '''
+        return next((agv for agv in self.agvs if agv.agvId==agvId),None) #returns agv or None if not found
+    
+    def getMhtById(self,nodeId):
+        '''
+        returns mh time for node
+        '''
+        return next(st.getMHT() for st in self.stations if st.nodeId==nodeId)
         
-
+    
             
 #'''
 #HEREUNDER LIES THE GREEDY SEQUENCING HEURISTIC
@@ -253,6 +265,7 @@ class Scheduler():
     
     
     def getScore(self,agv,task):
+        alpha = self.hyperparams.get('alpha',0.5)
         srcStation = list(filter(lambda x:x.nodeId==task.source,self.stations))[0] # src station
         dstStation = list(filter(lambda x:x.nodeId==task.dest,self.stations))[0] # destination station
         if self.getCharge(agv)<agv.LOWER_THRESHOLD:
@@ -261,8 +274,8 @@ class Scheduler():
                      for station in self.chargingStations]
             optIndex = dists.index(min(dists))
             nearestChargeNode = self.chargingStations[optIndex].getNode()
-            distScore = (self.layout.getDistanceFromNode(nearestChargeNode,task.source)+ \
-                         self.layout.getDistanceFromNode(task.source,task.dest))*agv.travelCost
+            distScore = agv.travelCost*((self.layout.getDistanceFromNode(nearestChargeNode,task.source)+ \
+                         self.layout.getDistanceFromNode(task.source,task.dest))/agv.getSpeed())
             
             #tardiness score
             tardScore=0
@@ -280,13 +293,13 @@ class Scheduler():
             
             tardiness = max(0,time-task.ldt)
             
-            tardScore = tardiness**2
+            tardScore = task.requestCost*tardiness
             
-            return tardScore + distScore
+            return alpha*tardScore + (1-alpha)*distScore
         
         else:
             #dist score
-            distScore = (self.layout.getDistanceFromNode(self.getCurrentReleaseNode(agv),task.source)+self.layout.getDistanceFromNode(task.source,task.dest))*agv.travelCost
+            distScore = agv.travelCost*((self.layout.getDistanceFromNode(self.getCurrentReleaseNode(agv),task.source)+self.layout.getDistanceFromNode(task.source,task.dest))/agv.getSpeed())
             #tardiness score
             tardScore=0
             dist = self.layout.getDistanceFromNode(self.getCurrentReleaseNode(agv),task.source)+\
@@ -298,9 +311,9 @@ class Scheduler():
             
             tardiness = max(0,time-task.ldt)
             
-            tardScore = tardiness**2
+            tardScore = task.requestCost*tardiness
             
-            return tardScore + distScore
+            return alpha*tardScore + (1-alpha)*distScore
         
     
     def addChargeTask(self,agv):
@@ -405,6 +418,7 @@ class Scheduler():
         if task.taskType=='TO':
             taskDict['ept']=task.ept
             taskDict['ldt']=task.ldt
+            taskDict['requestCost']=task.requestCost
         self.taskSequence.get(agvId).append(taskDict)
 #         print(self.taskList)
     
@@ -412,8 +426,8 @@ class Scheduler():
         '''
         creates a dictionary of nearest charge locations from nodes in a layout
         '''
-        nonChargeStations = [s.getNode() for s in self.stations if s.getType()!='C']
-        for s in nonChargeStations:
+        stations = [s.getNode() for s in self.stations]
+        for s in stations:
             dists = [self.layout.getDistanceFromNode(s, station.getNode()) for station in self.chargingStations]
             optIndex = dists.index(min(dists))
             nearestChargeNode = self.chargingStations[optIndex].getNode()
@@ -425,17 +439,22 @@ class Scheduler():
         returns nodeId of nearest charge location
         '''
         return self.nearestChargeFromStation.get(stationNode)
-        
-    def createTaskSequence(self):
+    
+    def fixChargeOrganiseTaskList(self):
         '''
-        function that converts scheduler's taskList into a scheduler's taskSequence (postprocessing - add ut tasks)
-        and checks for multiple charge tasks and assigns source and destination of charge tasks
-        ''' 
-        #check tasklist and remove duplicate charge tasks and add charge task source and destination
+        Checks for multiple charge tasks and assigns source and destination of charge tasks
+        '''
+         #check tasklist and remove duplicate charge tasks and add charge task source and destination
+        
+        
         for agv,tl in self.taskList.items():
-            taskListLen=len(tl)-1
-            toRemove=[]
             tasklist= self.taskList.get(agv)
+            agv_startNode = self.getStartNode(self.getAgvById(agv))
+            if agv_startNode in [x.getNode() for x in self.chargingStations]:
+                ct = Task(999,'C',agv_startNode,agv_startNode)
+                tasklist.insert(0,ct)
+            taskListLen=len(tasklist)-1
+            toRemove=[]
             for t in range(taskListLen):
                 if tasklist[t].taskType=='C' and t!=0:
                     if tasklist[t+1].taskType=='C':
@@ -454,11 +473,17 @@ class Scheduler():
                     tasklist[t+1].dest = self.getNearestChargeLocation(tasklist[t+1].source)
                     
             tasklist[:] =[t for t in tasklist if t not in toRemove]
-            self.tlLength.append(len(list(filter(lambda x:x.taskType=='TO',self.taskList.get(0))))+len(list(filter(lambda x:x.taskType=='TO',self.taskList.get(1)))))
-            if self.tlLength[-1]>100:
-                self.temp = copy.deepcopy(self.taskList)
-#             print(f'task list after processing:{tasklist}')
+            
         
+    def createTaskSequence(self):
+        '''
+        function that converts scheduler's taskList into a scheduler's taskSequence (postprocessing - add ut tasks)
+        and checks for multiple charge tasks and assigns source and destination of charge tasks
+        '''
+        for agv in self.agvs:
+            self.taskList.get(agv.agvId).append(Task(999,"C",'X','X'))
+       
+        self.fixChargeOrganiseTaskList()
         #Create task Sequence
         self.taskSequence={}
         #create keys in taskList for AGVs
@@ -469,7 +494,7 @@ class Scheduler():
         for agv in self.agvs:
             taskListLength = len(self.taskList.get(agv.agvId)) # length of tasks in task list
             self.taskSequence[agv.agvId]=[] # assign an empty list to each agv in task sequence
-            if len(self.taskList.get(agv.agvId))>0:
+            if len(self.taskList.get(agv.agvId))>0 and self.taskList.get(agv.agvId)[0].taskType !='C':
                 ut = Task(998,'UT',self.getStartNode(agv), self.taskList.get(agv.agvId)[0].source) 
                 #create a UT(Unloaded Travel)
                 #task, id and index dont matter'''
@@ -490,7 +515,7 @@ class Scheduler():
 #'''   
     
     
-    def solveLP(self,printOutput=False):
+    def solveLP(self,printOutput=False, requireConflictFree=False):
         numAGVs=len(self.agvs)
         REQ =[] #List consisting of number of requests
         SRC=[] #List containing SRC of requests
@@ -502,13 +527,14 @@ class Scheduler():
         dcr=[]
         sp=[]
         REQID=[]
-        
+        B0=[]
         #keep track of tasks (UT, TO , C) in agvs
         for a,agv in enumerate(self.agvs):
             REQ.append(len(self.taskSequence.get(a)))
             sp.append(agv.getSpeed())
             cr.append(agv.getChargeRate())
             dcr.append(agv.getDischargeRate())
+            B0.append(agv.getInitialCharge())
             SRC.append([])
             DEST.append([])
             EPT.append([])
@@ -520,7 +546,7 @@ class Scheduler():
                 REQID[a].append(self.taskSequence.get(a)[r]['taskId'])
                 SRC[a].append(self.taskSequence.get(a)[r]['source'])
                 DEST[a].append(self.taskSequence.get(a)[r]['dest'])
-                MHT[a].append(self.taskSequence.get(a)[r]['mhTime'])
+                MHT[a].append(self.taskSequence.get(a)[r].get('mhTime') or 0)
                 EPT[a].append(self.taskSequence.get(a)[r].get('ept') or 0)
                 LDT[a].append(self.taskSequence.get(a)[r].get('ldt') or 0)
                 
@@ -548,7 +574,7 @@ class Scheduler():
 
         #variable to represent the battery status at the beginning of request r
         B = {(r,v):m.addVar(vtype = GRB.CONTINUOUS, lb = 0.0, ub=100.0, name = f"B_{r}_{v}")
-             for v in range(numAGVs)  for r in range(REQ[v])}
+             for v in range(numAGVs)  for r in range(max(1,REQ[v]))} # we use max to avoid error becuae of zero tasklist length
 
         #battery can reach 0% only at charging stations
         for v in range(numAGVs):
@@ -564,7 +590,7 @@ class Scheduler():
 #                 print(r,v)
         #objective function
         #Objective 1 - To minimize lateness
-        obj_lateness = quicksum(Z[r,v]*Z[r,v] for v in range(numAGVs) for r in range(REQ[v]))
+        obj_lateness = quicksum(Z[r,v] for v in range(numAGVs) for r in range(REQ[v]))
 
         # #Objective 2 - To maximize charging duration and minimize parking duration at source and destination nodes
 #         obj_charging = grb.quicksum(0 if SRC[v][r] in C else 1*(S[r+1,v]-S[r,v]) for r in range(REQ[v]-1) for v in range(numAGVs))
@@ -589,8 +615,8 @@ class Scheduler():
         #Constraint 2 - Destination of request should equal source of next request
         for v in range(numAGVs):
             for r in range(REQ[v]-1):
-                i=SRC[v][r]
-                j=DEST[v][r]
+                #i=SRC[v][r]
+                #j=DEST[v][r]
                 m.addConstr(D[r,v]==S[r+1,v], name=f"Dest_{r}_{v}=Src{r+1}_{v}")
                 
         #Constraint 3 - A job cannot be picked up before EPT
@@ -602,11 +628,11 @@ class Scheduler():
         for v in range(numAGVs):
             for r in range(REQ[v]):
                 if LDT[v][r]>0:
-                    m.addConstr(Z[r,v]>=D[r,v]+MHT[v][r]- LDT[v][r], name = f"Z_{r}_{v}>=D_{r}_{v}-LDT_{r}_{v}") # where Z[r] represents slack, when Z{r} is -ve, it will be 0 due to lower bound
-        
+                    m.addConstr(Z[r,v]>=D[r,v]- LDT[v][r], name = f"Z_{r}_{v}>=D_{r}_{v}-LDT_{r}_{v}") # where Z[r] represents slack, when Z{r} is -ve, it will be 0 due to lower bound
+        #+MHT[v][r]
         #Constraint 5 - Battery initialization at starting nodes to 100%
-        for v in range(numAGVs):
-            m.addConstr(B[0,v]==100, name=f"B_0_init_{v}") #remove hardcoded 100 here
+        for v1 in range(numAGVs):
+            m.addConstr(B[0,v1]==B0[v1], name=f"B_0_init_{v1}") 
 
         #Constraint 6 - Battery discharging and charging
         for v in range(numAGVs):
@@ -614,7 +640,7 @@ class Scheduler():
                 i=SRC[v][r]
                 j=SRC[v][r+1]
                 dist = self.layout.getDistanceFromNode(i,j)
-                if i in C and r >=2:
+                if i in C:
                     b = m.addVar()
                     m.addConstr(b==B[r,v]+((S[r+1,v]-S[r,v]-(1/sp[v])*dist)*cr[v])-((1/sp[v])*dist*dcr[v]), name=f"b_{r}_{v}")
                     m.addGenConstrMin(B[r+1,v],[b,100], name=f"B_{r}_{v}") # charge cannot be greater than 100%
@@ -622,24 +648,39 @@ class Scheduler():
                     m.addConstr((B[r+1,v]==B[r,v]-((1/sp[v])*dist*dcr[v])), name=f"B_{r}_{v}")
                     
         #Constraint 7 - Check for conflicts
-#         for v1 in range(numAGVs-1):
-#             for v2 in range(v1+1,numAGVs): 
-#                 for r1 in range(REQ[v1]-1):
-#                     for r2 in range(REQ[v2]-1):
-#                         if SRC[v1][r1]==SRC[v2][r2]:
-#                             if LDT[v1][r1]<LDT[v2][r2]:
-#                                 dist = self.layout.getDistanceFromNode(source=SRC[v1][r1],dest=SRC[v1][r1+1])
-#                                 m.addConstr(S[r2,v2]>=S[r1+1,v1]-((1/sp[v1])*dist)+1,name=f"ConflictS_v{v1}{r1}_v{v2}{r2}")
-#                             elif LDT[v1][r1]>LDT[v2][r2]:
-#                                 dist = self.layout.getDistanceFromNode(source=SRC[v2][r2],dest=SRC[v2][r2+1])
-#                                 m.addConstr(S[r1,v1]>=S[r2+1,v2]-((1/sp[v2])*dist)+1,name=f"Conflict_v{v1}{r1}_v{v2}{r2}")
-#                         elif DEST[v1][r1]==DEST[v2][r2] and REQID[v1][r1]<998 and REQID[v2][r2]<998:
-#                             if LDT[v1][r1]<LDT[v2][r2]:
-#                                 dist = self.layout.getDistanceFromNode(source=DEST[v1][r1],dest=DEST[v1][r1+1])
-#                                 m.addConstr(D[r2,v2]>=D[r1+1,v1]-((1/sp[v1])*dist)+1,name=f"ConflictD_v{v1}{r1}_v{v2}{r2}")
-#                             elif LDT[v1][r1]>LDT[v2][r2]:
-#                                 dist = self.layout.getDistanceFromNode(source=DEST[v2][r2],dest=DEST[v2][r2+1])
-#                                 m.addConstr(D[r1,v1]>=D[r2+1,v2]-((1/sp[v2])*dist)+1,name=f"Conflict_v{v1}{r1}_v{v2}{r2}")
+        if requireConflictFree:
+            for v1 in range(numAGVs-1):
+                for v2 in range(v1+1,numAGVs): 
+                    for r1 in range(REQ[v1]-1):
+                        for r2 in range(REQ[v2]-1):
+                            if SRC[v1][r1]==SRC[v2][r2]:
+                                y=m.addVar(vtype=GRB.BINARY)
+                                dist = self.layout.getDistanceFromNode(source=SRC[v1][r1],dest=DEST[v1][r1])
+                                m.addConstr(S[r2,v2]+10000*y>=D[r1,v1]-(dist/sp[v1])+0.1, name = f"ConflictS1_{v1}_{r1}_{v2}_{r2}")
+                                dist = self.layout.getDistanceFromNode(source=SRC[v2][r2],dest=DEST[v2][r2])
+                                m.addConstr(S[r1,v1]>=D[r2,v2]-(dist/sp[v2])+0.1-(1-y)*10000, name = f"ConflictS2_{v1}_{r1}_{v2}_{r2}")
+                            elif DEST[v1][r1]==DEST[v2][r2]:
+                                y=m.addVar(vtype=GRB.BINARY)
+                                dist = self.layout.getDistanceFromNode(source=SRC[v1][r1+1],dest=DEST[v1][r1+1])
+                                m.addConstr(D[r2,v2]+10000*y>=D[r1+1,v1]-(dist/sp[v1])+0.1, name = f"ConflictD1_{v1}_{r1}_{v2}_{r2}")
+                                dist = self.layout.getDistanceFromNode(source=SRC[v2][r2+1],dest=DEST[v2][r2+1])
+                                m.addConstr(D[r1,v1]>=D[r2+1,v2]-(dist/sp[v2])+0.1-(1-y)*10000, name = f"ConflictD2_{v1}_{r1}_{v2}_{r2}")
+                        
+                            
+                            
+#                            if LDT[v1][r1]<LDT[v2][r2]:
+#                                dist = self.layout.getDistanceFromNode(source=SRC[v1][r1],dest=SRC[v1][r1+1])
+#                                m.addConstr(S[r2,v2]>=S[r1+1,v1]-((1/sp[v1])*dist)+1,name=f"ConflictS_v{v1}{r1}_v{v2}{r2}")
+#                            elif LDT[v1][r1]>LDT[v2][r2]:
+#                                dist = self.layout.getDistanceFromNode(source=SRC[v2][r2],dest=SRC[v2][r2+1])
+#                                m.addConstr(S[r1,v1]>=S[r2+1,v2]-((1/sp[v2])*dist)+1,name=f"Conflict_v{v1}{r1}_v{v2}{r2}")
+#                        elif DEST[v1][r1]==DEST[v2][r2] and REQID[v1][r1]<998 and REQID[v2][r2]<998:
+#                            if LDT[v1][r1]<LDT[v2][r2]:
+#                                dist = self.layout.getDistanceFromNode(source=DEST[v1][r1],dest=DEST[v1][r1+1])
+#                                m.addConstr(D[r2,v2]>=D[r1+1,v1]-((1/sp[v1])*dist)+1,name=f"ConflictD_v{v1}{r1}_v{v2}{r2}")
+#                            elif LDT[v1][r1]>LDT[v2][r2]:
+#                                dist = self.layout.getDistanceFromNode(source=DEST[v2][r2],dest=DEST[v2][r2+1])
+#                                m.addConstr(D[r1,v1]>=D[r2+1,v2]-((1/sp[v2])*dist)+1,name=f"Conflict_v{v1}{r1}_v{v2}{r2}")
     
     
         #optimize model
@@ -656,6 +697,11 @@ class Scheduler():
 
         elif status == GRB.Status.INF_OR_UNBD or status== GRB.Status.INFEASIBLE:
             print(f'Optimization was stopped with status {status}')
+            
+            print(self.taskList)
+            print('-------------------------------------------------------')
+            print(self.taskSequence)
+            
             # do IIS
             print('The model is infeasible; computing IIS')
             m.computeIIS()
@@ -690,19 +736,28 @@ class Scheduler():
         '''
         randomly remove a charging task from sequence of tasks of a random agv
         '''
-        self.stationALNSMethods.destroyRandomCharge(agv=agv, scheduler=self)           
+        start=perf_counter()
+        self.stationALNSMethods.destroyRandomCharge(agv=agv)
+        end = perf_counter()
+        return end-start
 
     def destroyAllCharge(self,agv):
         '''
         destroy all the charging tasks of a random agv
         '''
-        self.stationALNSMethods.destroyAllCharge(agv=agv, scheduler=self)
+        start=perf_counter()
+        self.stationALNSMethods.destroyAllCharge(agv=agv)
+        end=perf_counter()
+        return end-start
         
     def destroyWorstCharge(self,agv):
         '''
         Destroys the worst charge task from a set of charge tasks
         '''
-        self.stationALNSMethods.destroyWorstCharge(agv=agv, scheduler=self)
+        start=perf_counter()
+        self.stationALNSMethods.destroyWorstCharge(agv=agv)
+        end=perf_counter()
+        return end-start
                       
     
     def repairInsertNCCharge(self,agv):
@@ -710,193 +765,842 @@ class Scheduler():
         repair sequence by introducing Non-Critical charge after tasks in a random agv
         this function should assign tasks with a charge threshold of 60%, however, it is not a critical 
         '''
-        self.stationALNSMethods.repairInsertNCCharge(agv=agv,taskList=self.taskList.get(agv.agvId),scheduler=self)
-        
-        pass
+        start=perf_counter()
+        self.stationALNSMethods.repairInsertNCCharge(agv=agv,taskList=self.taskList.get(agv.agvId))
+        end=perf_counter()
+        return end-start
     
     def repairInsertNCandCCharge(self, agv):
         '''
         repair sequence by introducing ONE NC charge followed by greedily placing C charge
         '''
-        self.stationALNSMethods.repairInsertNCandCCharge(agv=agv,taskList=self.taskList.get(agv.agvId),\
-                                               scheduler=self)
-        pass
+        start=perf_counter()
+        self.stationALNSMethods.repairInsertNCandCCharge(agv=agv,taskList=self.taskList.get(agv.agvId))
+        end=perf_counter()
+        return end-start
     
     def repairInsertCCharge(self, agv):
         '''
         repair sequence by introducing C charge greedily
         '''
-        self.stationALNSMethods.repairInsertCCharge(agv=agv,taskList=self.taskList.get(agv.agvId),\
-                                               scheduler=self, threshold=agv.LOWER_THRESHOLD)
+        start=perf_counter()
+        self.stationALNSMethods.repairInsertCCharge(agv=agv,taskList=self.taskList.get(agv.agvId), \
+                                                    threshold=agv.LOWER_THRESHOLD)
+        end=perf_counter()
+        return end-start
         
     
     def repairInsertAllCharge(self,agv):
         '''
         repair sequence by introducing charge task after every ask in an agv
         '''
-        self.stationALNSMethods.repairInsertAllCharge(agv=agv,taskList=self.taskList.get(agv.agvId), scheduler=self)
+        start=perf_counter()
+        self.stationALNSMethods.repairInsertAllCharge(agv=agv,taskList=self.taskList.get(agv.agvId))
+        end=perf_counter()
+        return end-start
     
     def destroyShawDistance(self):
+        start=perf_counter()
         self.customerALNSMethods.destroyShawDistance()
+        end=perf_counter()
+        return end-start
         
     def destroyShawTime(self):
+        start=perf_counter()
         self.customerALNSMethods.destroyShawTimeWindow()
+        end=perf_counter()
+        return end-start
         
     def destroyShawCapability(self):
+        start=perf_counter()
         self.customerALNSMethods.destroyShawCapability()
+        end=perf_counter()
+        return end-start
         
     def destroyShaw(self):
+        start=perf_counter()
         self.customerALNSMethods.shawRemoval()
+        end=perf_counter()
+        return end-start
         
     def destroyRandomTasks(self):
+        start=perf_counter()
         self.customerALNSMethods.destroyRandomTasks()
+        end=perf_counter()
+        return end-start
+    
+    def destroyWorstTardinessCustomers(self):
+        start=perf_counter()
+        self.customerALNSMethods.destroyWorstTardinessCustomers()
+        end=perf_counter()
+        return end-start
+        
         
     def repairInsertRandomTasks(self):
+        start=perf_counter()
         self.customerALNSMethods.repairInsertRandomTasks()
-
+        end=perf_counter()
+        return end-start
+        
+    def repairInsertGreedyTask(self):
+        start=perf_counter()
+        self.customerALNSMethods.repairInsertGreedyTasks()
+        end=perf_counter()
+        return end-start
+        
+    def repairKRegret(self):
+        start=perf_counter()
+        self.customerALNSMethods.repairKRegret()
+        end=perf_counter()
+        return end-start
+        
+    def repairGreedyEDDInsert(self):
+        start=perf_counter()
+        self.customerALNSMethods.repairGreedyEDDInsert()
+        end=perf_counter()
+        return end-start
+        
     def alns(self, solTime):
         '''
         Adaptive Large Neighborhood Search
         TODO: See the effect of adding a Deep Neural Net to initialize initial weights of destroy and repair methods
         '''
-        psi1 = 0.9 # if new solution is new global best
-        psi2 = 0.6 # if new solution is better than current solution but not the best
-        psi3 = 0.2 # if new solution is accepted
-
-        lambdaP = 0.5 # lambda parameter to cont
-        
-        bestSol = copy.deepcopy(self.taskSchedule)
+        print('method0 executed')
+        psi1 = self.hyperparams.get('psi1',0.9) # if new solution is new global best
+        psi2 = self.hyperparams.get('psi2',0.6) # if new solution is better than current solution but not the best
+        psi3 = self.hyperparams.get('psi3',0.3) # if new solution is accepted
+        lambdaP = self.hyperparams.get('lambdaP',0.5) # lambda parameter to cont
         bestTL = copy.deepcopy(self.taskList)
         bestTaskList = copy.deepcopy(self.taskList)
-        bestScore = self.getScoreALNS(bestSol)
-        
+        bestScore = self.getScoreALNS()
         currentScore = bestScore
-        print(f'Best Score at the start:{bestScore}')
+        #print(f'Best Score at the start:{bestScore}')
         '''
         Initialize set of destroy and repair methods, initialize weights of respective methods
         '''
-        customerDestroy = [self.destroyShaw,self.destroyShawDistance,self.destroyShawTime,self.destroyShawCapability]
-        customerRepair = [self.repairInsertRandomTasks]
-        
+        customerDestroy = [self.destroyShaw,self.destroyShawDistance,self.destroyShawTime,self.destroyShawCapability,\
+                          self.destroyRandomTasks, self.destroyWorstTardinessCustomers]
+        customerRepair = [self.repairKRegret,self.repairInsertGreedyTask,self.repairGreedyEDDInsert]
         customerRhoD=[1/len(customerDestroy) for i in range(len(customerDestroy))]
+        customerDestroyN = [0 for i in range(len(customerDestroy))]
+        customerDestroyB= [0 for i in range(len(customerDestroy))]
+        customerRepairN = [0 for i in range(len(customerRepair))]
+        customerRepairB = [0 for i in range(len(customerRepair))]
         customerRhoR=[1/len(customerRepair) for i in range(len(customerRepair))]
-    
-        destroy = [self.destroyRandomCharge,self.destroyWorstCharge,self.destroyAllCharge] # destroy methods
-        repair = [self.repairInsertCCharge,self.repairInsertNCCharge,self.repairInsertAllCharge,\
+        stationDestroy = [self.destroyRandomCharge,self.destroyAllCharge] # destroy methods
+        stationRepair = [self.repairInsertCCharge,self.repairInsertNCCharge,self.repairInsertAllCharge,\
                   self.repairInsertNCandCCharge] # repair methods
-        rhoD=[1/len(destroy) for i in range(len(destroy))] # weight vector of destroy methods
-        destroyN=[0 for i in range(len(destroy))]
-        destroyB=[0 for i in range(len(destroy))]
-        destroyI=[0 for i in range(len(destroy))]
-        
-        rhoR=[1/len(repair) for i in range(len(repair))] # weight vector of repair methods
-        repairN=[0 for i in range(len(repair))]
-        repairB=[0 for i in range(len(repair))]
-        repairI=[0 for i in range(len(repair))]
-        
+        stationRhoD=[1/len(stationDestroy) for i in range(len(stationDestroy))] # weight vector of destroy methods
+        stationDestroyN=[0 for i in range(len(stationDestroy))] # number of times station destroy is chosen
+        stationDestroyB=[0 for i in range(len(stationDestroy))] # number of times station destroy leads to best solution
+        stationRhoR=[1/len(stationRepair) for i in range(len(stationRepair))] # weight vector of repair methods
+        stationRepairN=[0 for i in range(len(stationRepair))] # number of times station reair is chosen
+        stationRepairB=[0 for i in range(len(stationRepair))] # number of times it leads to best solution
         numIter=0
         scores=[]
+        scores.append((numIter,bestScore)) # first observation
         bestScores=[]
-        startTime = time()
+        startTime = perf_counter()
+        bestScores.append((numIter,bestScore,perf_counter()-startTime))
         infeasibleCount=0
-        while time()-startTime<=solTime: # solTime is passed as the time available to provide a solution
+        a1=int(self.hyperparams.get('a',2))
+        while perf_counter()-startTime<=solTime: # solTime is passed as the time available to provide a solution
             isStationMethod=True
-            if False:
+            self.setAGVInfo()# reset the information about AGVs
+            if numIter% a1==0:
                 agv = np.random.choice(self.agvs) 
-                selD = np.random.choice(destroy,p=rhoD)
-                indexD = destroy.index(selD) # index of destroy method
-                destroyN[indexD]+=1
-                selR = np.random.choice(repair,p=rhoR) 
-                indexR = repair.index(selR) # index of repair method
-                repairN[indexR]+=1
-
+                selD = np.random.choice(stationDestroy,p=stationRhoD)
+                stationIndexD = stationDestroy.index(selD) # index of destroy method
+                stationDestroyN[stationIndexD]+=1
+                selR = np.random.choice(stationRepair,p=stationRhoR) 
+                stationIndexR = stationRepair.index(selR) # index of repair method
+                stationRepairN[stationIndexR]+=1
                 selD(agv) # destroy agv sequence
                 selR(agv) # repair agv sequence
                 isStationMethod=True
             else:
                 selD = np.random.choice(customerDestroy,p=customerRhoD)
                 selR = np.random.choice(customerRepair, p=customerRhoR)
-                
                 selD()
                 customerIndexD=customerDestroy.index(selD)
+                customerDestroyN[customerIndexD]+=1
                 selR()
                 customerIndexR=customerRepair.index(selR)
+                customerRepairN[customerIndexR]+=1
                 isStationMethod=False
-                
-            self.createTaskSequence()
-            isSolvable = self.solveLP()
-            
-            if isSolvable:
+            if True:
+                self.createTaskSequence()
                 xtl=self.taskList
-                xt=self.taskSchedule
-                newScore = self.getScoreALNS(xt)
+                self.solveLP()
+                newScore = self.getScoreALNS()
                 scores.append((numIter,newScore))
                 
                 if newScore<bestScore:
                     bestTL=copy.deepcopy(xtl)#copy tasklist
-                    bestSol=copy.deepcopy(xt)#copy taskSchedule
                     bestScore=newScore
-                    bestScores.append((numIter,bestScore))
-                    
+                    bestScores.append((numIter,bestScore,perf_counter()-startTime))
                     if isStationMethod:
-                        rhoD[indexD]= lambdaP*rhoD[indexD]+(1-lambdaP)*psi1
-                        rhoR[indexR]= lambdaP*rhoR[indexR]+(1-lambdaP)*psi1
-                        destroyB[indexD]+=1
-                        repairB[indexR]+=1
-                        self.updateWeightVectors(rhoD, rhoR)
+                        stationDestroyB[stationIndexD]+=1
+                        stationRepairB[stationIndexR]+=1
+                        self.updateWeightVectors(rhoD=stationRhoD,rhoR=stationRhoR,indexD=stationIndexD, indexR=stationIndexR, lambdaX=lambdaP, psiX=psi1)
                     else:
-                        customerRhoD[customerIndexD]=lambdaP*customerRhoD[customerIndexD]+(1-lambdaP)*psi1
-                        customerRhoR[customerIndexR]=lambdaP*customerRhoR[customerIndexR]+(1-lambdaP)*psi1
-                        self.updateWeightVectors(customerRhoD,customerRhoR)
-                        
-                    
-                    
+                        customerDestroyB[customerIndexD]+=1
+                        customerRepairB[customerIndexR]+=1
+                        self.updateWeightVectors(rhoD=customerRhoD,rhoR=customerRhoR,indexD=customerIndexD, indexR=customerIndexR, lambdaX=lambdaP, psiX=psi1)        
                 elif newScore < currentScore:
                     currentScore=newScore
+                    if isStationMethod:
+                        self.updateWeightVectors(rhoD=stationRhoD,rhoR=stationRhoR,indexD=stationIndexD, indexR=stationIndexR, lambdaX=lambdaP, psiX=psi2)
+                    else:
+                        self.updateWeightVectors(rhoD=customerRhoD,rhoR=customerRhoR,indexD=customerIndexD, indexR=customerIndexR, lambdaX=lambdaP, psiX=psi2)
+                else:
+                    currentScore=newScore
+                    if isStationMethod:
+                        self.updateWeightVectors(rhoD=stationRhoD,rhoR=stationRhoR,indexD=stationIndexD, indexR=stationIndexR, lambdaX=lambdaP, psiX=psi3)
+                    else:
+                        self.updateWeightVectors(rhoD=customerRhoD,rhoR=customerRhoR,indexD=customerIndexD, indexR=customerIndexR, lambdaX=lambdaP, psiX=psi3)
+                         
+            else:
+                infeasibleCount+=1   
+            numIter+=1
+        self.taskList=bestTL
+        self.createTaskSequence()
+        self.solveLP()
+        
+        solution={'numIter':numIter,
+                  'stationDestroyN':stationDestroyN,
+                  'stationRepairN':stationRepairN,
+                  'scores':scores,
+                  'bestScores':bestScores,
+                  'stationDestroyB':stationDestroyB,
+                  'stationRepairB':stationRepairB,
+                  'customerDestroyN':customerDestroyN,
+                  'customerRepairN':customerRepairN,
+                  'customerDestroyB':customerDestroyB,
+                  'customerRepairB':customerRepairB,
+                  'methodN':None
+                  }
+                  
+        
+        return solution
+
+    def alns1(self, solTime):
+        '''
+        Adaptive Large Neighborhood Search
+        TODO: See the effect of adding a Deep Neural Net to initialize initial weights of destroy and repair methods
+        '''
+        print('method1 executed')
+        psi1 = 0.9 # if new solution is new global best
+        psi2 = 0.6 # if new solution is better than current solution but not the best
+        psi3 = 0.3 # if new solution is accepted
+        lambdaP = 0.5 # lambda parameter to cont
+        bestTL = copy.deepcopy(self.taskList)
+        bestTaskList = copy.deepcopy(self.taskList)
+        bestScore = self.getGreedyTaskListScore()
+        currentScore = bestScore
+        #print(f'Best Score at the start:{bestScore}')
+        '''
+        Initialize set of destroy and repair methods, initialize weights of respective methods
+        '''
+        customerDestroy = [self.destroyShaw,self.destroyShawDistance,self.destroyShawTime,self.destroyShawCapability,\
+                          self.destroyRandomTasks,self.destroyWorstTardinessCustomers]
+        customerRepair = [self.repairKRegret,self.repairInsertGreedyTask,self.repairGreedyEDDInsert]
+        customerRhoD=[1/len(customerDestroy) for i in range(len(customerDestroy))]
+        customerDestroyN = [0 for i in range(len(customerDestroy))]
+        customerDestroyB= [0 for i in range(len(customerDestroy))]
+        customerRepairN = [0 for i in range(len(customerRepair))]
+        customerRepairB = [0 for i in range(len(customerRepair))]
+        customerRhoR=[1/len(customerRepair) for i in range(len(customerRepair))]
+        stationDestroy = [self.destroyRandomCharge,self.destroyAllCharge] # destroy methods
+        stationRepair = [self.repairInsertCCharge,self.repairInsertNCCharge,self.repairInsertAllCharge,\
+                  self.repairInsertNCandCCharge] # repair methods
+        stationRhoD=[1/len(stationDestroy) for i in range(len(stationDestroy))] # weight vector of destroy methods
+        stationDestroyN=[0 for i in range(len(stationDestroy))] # number of times station destroy is chosen
+        stationDestroyB=[0 for i in range(len(stationDestroy))] # number of times station destroy leads to best solution
+        stationRhoR=[1/len(stationRepair) for i in range(len(stationRepair))] # weight vector of repair methods
+        stationRepairN=[0 for i in range(len(stationRepair))] # number of times station reair is chosen
+        stationRepairB=[0 for i in range(len(stationRepair))] # number of times it leads to best solution
+        numIter=0
+        scores=[]
+        scores.append((numIter,bestScore)) # first observation
+        bestScores=[]
+        startTime = perf_counter()
+        bestScores.append((numIter,bestScore,perf_counter()-startTime))
+        infeasibleCount=0
+        while perf_counter()-startTime<=solTime: # solTime is passed as the time available to provide a solution
+            isStationMethod=True
+            self.setAGVInfo()# reset the information about AGVs
+            if numIter%3==0:
+                agv = np.random.choice(self.agvs) 
+                selD = np.random.choice(stationDestroy,p=stationRhoD)
+                stationIndexD = stationDestroy.index(selD) # index of destroy method
+                stationDestroyN[stationIndexD]+=1
+                selR = np.random.choice(stationRepair,p=stationRhoR) 
+                stationIndexR = stationRepair.index(selR) # index of repair method
+                stationRepairN[stationIndexR]+=1
+                runtimeD=selD(agv) # destroy agv sequence
+                runtimeR=selR(agv) # repair agv sequence
+                isStationMethod=True
+            else:
+                selD = np.random.choice(customerDestroy,p=customerRhoD)
+                selR = np.random.choice(customerRepair, p=customerRhoR)
+                runtimeD=selD()
+                customerIndexD=customerDestroy.index(selD)
+                customerDestroyN[customerIndexD]+=1
+                runtimeR=selR()
+                customerIndexR=customerRepair.index(selR)
+                customerRepairN[customerIndexR]+=1
+                isStationMethod=False
+            if True:
+                self.fixChargeOrganiseTaskList()#fix tasklist
+                xtl=self.taskList
+                newScore = self.getGreedyTaskListScore()
+                scores.append((numIter,newScore))
+                
+                if newScore<bestScore:
+                    bestTL=copy.deepcopy(xtl)#copy tasklist
+                    bestScore=newScore
+                    bestScores.append((numIter,bestScore,perf_counter()-startTime))
+                    if isStationMethod:
+                        stationDestroyB[stationIndexD]+=1
+                        stationRepairB[stationIndexR]+=1
+                        self.updateWeightVectors(rhoD=stationRhoD,rhoR=stationRhoR,indexD=stationIndexD, indexR=stationIndexR, lambdaX=lambdaP, psiX=psi1, runtimeD=runtimeD, runtimeR=runtimeR)
+                    else:
+                        customerDestroyB[customerIndexD]+=1
+                        customerRepairB[customerIndexR]+=1
+                        self.updateWeightVectors(rhoD=customerRhoD,rhoR=customerRhoR,indexD=customerIndexD, indexR=customerIndexR, lambdaX=lambdaP, psiX=psi1,runtimeD=runtimeD, runtimeR=runtimeR)        
+                elif newScore < currentScore:
+                    currentScore=newScore
+                    if isStationMethod:
+                        self.updateWeightVectors(rhoD=stationRhoD,rhoR=stationRhoR,indexD=stationIndexD, indexR=stationIndexR, lambdaX=lambdaP, psiX=psi2,runtimeD=runtimeD, runtimeR=runtimeR)
+                    else:
+                        self.updateWeightVectors(rhoD=customerRhoD,rhoR=customerRhoR,indexD=customerIndexD, indexR=customerIndexR, lambdaX=lambdaP, psiX=psi2,runtimeD=runtimeD, runtimeR=runtimeR)
+                else:
+                    currentScore=newScore
+                    if isStationMethod:
+                        self.updateWeightVectors(rhoD=stationRhoD,rhoR=stationRhoR,indexD=stationIndexD, indexR=stationIndexR, lambdaX=lambdaP, psiX=psi3,runtimeD=runtimeD, runtimeR=runtimeR)
+                    else:
+                        self.updateWeightVectors(rhoD=customerRhoD,rhoR=customerRhoR,indexD=customerIndexD, indexR=customerIndexR, lambdaX=lambdaP, psiX=psi3,runtimeD=runtimeD, runtimeR=runtimeR)
+                         
+            else:
+                infeasibleCount+=1   
+            numIter+=1
+        
+        self.taskList=bestTL
+        self.createTaskSequence()
+        self.solveLP()
+        solution={'numIter':numIter,
+                  'stationDestroyN':stationDestroyN,
+                  'stationRepairN':stationRepairN,
+                  'scores':scores,
+                  'bestScores':bestScores,
+                  'stationDestroyB':stationDestroyB,
+                  'stationRepairB':stationRepairB,
+                  'customerDestroyN':customerDestroyN,
+                  'customerRepairN':customerRepairN,
+                  'customerDestroyB':customerDestroyB,
+                  'customerRepairB':customerRepairB,
+                  'methodN':None
+                  }
+        return solution
+    
+    def alns2(self, solTime):
+        '''
+        Adaptive Large Neighborhood Search
+        TODO: See the effect of adding a Deep Neural Net to initialize initial weights of destroy and repair methods
+        '''
+        print('method2 executed')
+        psi1 = 0.9 # if new solution is new global best
+        psi2 = 0.6 # if new solution is better than current solution but not the best
+        psi3 = 0.3 # if new solution is accepted
+
+        lambdaP = 0.5 # lambda parameter to cont
+        
+        
+        bestTL = copy.deepcopy(self.taskList)
+        bestScore = self.getScoreALNS()
+        
+        currentScore = bestScore
+        #print(f'Best Score at the start:{bestScore}')
+        '''
+        Initialize set of destroy and repair methods, initialize weights of respective methods
+        '''
+        M = ['S','C'] # which method to choose
+        rhoM=[0.5,0.5] # initial weights to choose family
+        methodN=[0,0] #to keep track of how many times 'S' and 'C' were run
+        
+        customerDestroy = [self.destroyShaw,self.destroyShawDistance,self.destroyShawTime,self.destroyShawCapability,\
+                          self.destroyRandomTasks,self.destroyWorstTardinessCustomers]
+        customerRepair = [self.repairKRegret,self.repairInsertGreedyTask, self.repairGreedyEDDInsert]
+        
+        customerRhoD=[1/len(customerDestroy) for i in range(len(customerDestroy))]
+        customerDestroyN = [0 for i in range(len(customerDestroy))]
+        customerDestroyB= [0 for i in range(len(customerDestroy))]
+        customerRepairN = [0 for i in range(len(customerRepair))]
+        customerRepairB = [0 for i in range(len(customerRepair))]
+        
+        customerRhoR=[1/len(customerRepair) for i in range(len(customerRepair))]
+    
+        stationDestroy = [self.destroyRandomCharge,self.destroyAllCharge, self.destroyWorstCharge] # destroy methods
+        stationRepair = [self.repairInsertCCharge,self.repairInsertNCCharge,self.repairInsertAllCharge,\
+                  self.repairInsertNCandCCharge] # repair methods
+        stationRhoD=[1/len(stationDestroy) for i in range(len(stationDestroy))] # weight vector of destroy methods
+        stationDestroyN=[0 for i in range(len(stationDestroy))] # number of times station destroy is chosen
+        stationDestroyB=[0 for i in range(len(stationDestroy))] # number of times station destroy leads to best solution
+        
+        stationRhoR=[1/len(stationRepair) for i in range(len(stationRepair))] # weight vector of repair methods
+        stationRepairN=[0 for i in range(len(stationRepair))] # number of times station reair is chosen
+        stationRepairB=[0 for i in range(len(stationRepair))] # number of times it leads to best solution
+        
+        numIter=0
+        scores=[]
+        scores.append((numIter,bestScore)) # first observation
+        bestScores=[]
+        startTime = perf_counter()
+        bestScores.append((numIter,bestScore,perf_counter()-startTime))
+        infeasibleCount=0
+        while perf_counter()-startTime<=solTime: # solTime is passed as the time available to provide a solution
+            chosenMethod = np.random.choice(M,p=rhoM)
+            indexM = M.index(chosenMethod) # index of chosen method
+            self.setAGVInfo()# reset the information about AGVs
+            if chosenMethod=='S':
+                agv = np.random.choice(self.agvs) 
+                selD = np.random.choice(stationDestroy,p=stationRhoD)
+                stationIndexD = stationDestroy.index(selD) # index of destroy method
+                stationDestroyN[stationIndexD]+=1
+                selR = np.random.choice(stationRepair,p=stationRhoR) 
+                stationIndexR = stationRepair.index(selR) # index of repair method
+                stationRepairN[stationIndexR]+=1
+                selD(agv) # destroy agv sequence
+                selR(agv) # repair agv sequence
+                isStationMethod=True
+            else:
+                selD = np.random.choice(customerDestroy,p=customerRhoD)
+                selR = np.random.choice(customerRepair, p=customerRhoR)
+                selD()
+                customerIndexD=customerDestroy.index(selD)
+                customerDestroyN[customerIndexD]+=1
+                selR()
+                customerIndexR=customerRepair.index(selR)
+                customerRepairN[customerIndexR]+=1
+                isStationMethod=False
+            if True: #because we do not do LP at each stage
+                self.fixChargeOrganiseTaskList()#fix tasklist
+                xtl=self.taskList
+                self.createTaskSequence()
+                self.solveLP()
+                newScore = self.getScoreALNS()
+                scores.append((numIter,newScore))
+                if newScore<bestScore:
+                    bestTL=copy.deepcopy(xtl)#copy tasklist
+                    bestScore=newScore
+                    bestScores.append((numIter,bestScore,perf_counter()-startTime))
+                    self.updateWeightVectors(rhoD= rhoM, rhoR=rhoM, indexD=indexM, indexR=indexM, lambdaX=lambdaP, psiX=psi1)
+                    methodN[indexM]+=1
+                    if isStationMethod:
+                        self.updateWeightVectors(rhoD=stationRhoD,rhoR=stationRhoR,indexD=stationIndexD, indexR=stationIndexR, lambdaX=lambdaP, psiX=psi1)
+                        stationDestroyB[stationIndexD]+=1
+                        stationRepairB[stationIndexR]+=1
+                    else:
+                        self.updateWeightVectors(rhoD=customerRhoD,rhoR=customerRhoR,indexD=customerIndexD, indexR=customerIndexR, lambdaX=lambdaP, psiX=psi1)
+                        customerDestroyB[customerIndexD]+=1
+                        customerRepairB[customerIndexR]+=1
+                elif newScore < currentScore:
+                    currentScore=newScore
+                    self.updateWeightVectors(rhoD= rhoM, rhoR=rhoM, indexD=indexM, indexR=indexM, lambdaX=lambdaP, psiX=psi2)
+                    methodN[indexM]+=1
 #                     scores.append((numIter,currentScore))
                     if isStationMethod:
-                        rhoD[indexD]= lambdaP*rhoD[indexD]+(1-lambdaP)*psi2
-                        rhoR[indexR]= lambdaP*rhoR[indexR]+(1-lambdaP)*psi2
-                        destroyI[indexD]+=1
-                        repairI[indexR]+=1
-                        self.updateWeightVectors(rhoD, rhoR)
+                        self.updateWeightVectors(rhoD=stationRhoD,rhoR=stationRhoR,indexD=stationIndexD, indexR=stationIndexR, lambdaX=lambdaP, psiX=psi2)
                     else:
-                        customerRhoD[customerIndexD]=lambdaP*customerRhoD[customerIndexD]+(1-lambdaP)*psi2
-                        customerRhoR[customerIndexR]=lambdaP*customerRhoR[customerIndexR]+(1-lambdaP)*psi2
-                        self.updateWeightVectors(customerRhoD,customerRhoR)
-                    
+                        self.updateWeightVectors(rhoD=customerRhoD,rhoR=customerRhoR,indexD=customerIndexD, indexR=customerIndexR, lambdaX=lambdaP, psiX=psi2)
                 else:
+                    currentScore=newScore
+                    self.updateWeightVectors(rhoD= rhoM, rhoR=rhoM, indexD=indexM, indexR=indexM, lambdaX=lambdaP, psiX=psi3)
+                    methodN[indexM]+=1
                     if isStationMethod:
-                        
-                        rhoD[indexD]= lambdaP*rhoD[indexD]+(1-lambdaP)*psi3
-                        rhoR[indexR]= lambdaP*rhoR[indexR]+(1-lambdaP)*psi3
-                        self.updateWeightVectors(rhoD, rhoR)
+                        self.updateWeightVectors(rhoD=stationRhoD,rhoR=stationRhoR,indexD=stationIndexD, indexR=stationIndexR, lambdaX=lambdaP, psiX=psi3)
                     else:
-                        customerRhoD[customerIndexD]=lambdaP*customerRhoD[customerIndexD]+(1-lambdaP)*psi3
-                        customerRhoR[customerIndexR]=lambdaP*customerRhoR[customerIndexR]+(1-lambdaP)*psi3
-                        self.updateWeightVectors(customerRhoD,customerRhoR)
-                        
-                    
+                        self.updateWeightVectors(rhoD=customerRhoD,rhoR=customerRhoR,indexD=customerIndexD, indexR=customerIndexR, lambdaX=lambdaP, psiX=psi3)
             else:
                 infeasibleCount+=1
                 
             numIter+=1
-                
         
-        print('rhoD:',rhoD)
-        print('rhoR:',rhoR)
-        print(f'customerRhoD:{customerRhoD}')
-        print(f'customerRhoR:{customerRhoR}')
-        print('Infeasibility Count:', infeasibleCount)
-        self.taskSchedule=bestSol
         self.taskList=bestTL
-        return bestSol,bestScore,numIter, destroyN,repairN,scores,bestScores,destroyB,repairB,destroyI,repairI
+        self.createTaskSequence()
+        self.solveLP()
+        solution={'numIter':numIter,
+                  'stationDestroyN':stationDestroyN,
+                  'stationRepairN':stationRepairN,
+                  'scores':scores,
+                  'bestScores':bestScores,
+                  'stationDestroyB':stationDestroyB,
+                  'stationRepairB':stationRepairB,
+                  'customerDestroyN':customerDestroyN,
+                  'customerRepairN':customerRepairN,
+                  'customerDestroyB':customerDestroyB,
+                  'customerRepairB':customerRepairB,
+                  'methodN':methodN
+                  }
+        return solution
     
-    def updateWeightVectors(self,rhoD,rhoR):
+    
+    def alns3(self, solTime):
+        '''
+        Adaptive Large Neighborhood Search
+        TODO: See the effect of adding a Deep Neural Net to initialize initial weights of destroy and repair methods
+        '''
+        print('method3 executed')
+        psi1 = 0.9 # if new solution is new global best
+        psi2 = 0.6 # if new solution is better than current solution but not the best
+        psi3 = 0.3 # if new solution is accepted
+
+        lambdaP = 0.5 # lambda parameter to cont
+        
+        
+        bestTL = copy.deepcopy(self.taskList)
+        bestScore = self.getGreedyTaskListScore()
+        
+        currentScore = bestScore
+        #print(f'Best Score at the start:{bestScore}')
+        '''
+        Initialize set of destroy and repair methods, initialize weights of respective methods
+        '''
+        customerDestroy = [self.destroyShaw,self.destroyShawDistance,self.destroyShawTime,self.destroyShawCapability,\
+                          self.destroyRandomTasks,self.destroyWorstTardinessCustomers]
+        customerRepair = [self.repairKRegret,self.repairInsertGreedyTask,self.repairGreedyEDDInsert]
+        
+        customerRhoD=[1/len(customerDestroy) for i in range(len(customerDestroy))]
+        customerDestroyN = [0 for i in range(len(customerDestroy))]
+        customerDestroyB= [0 for i in range(len(customerDestroy))]
+        customerRepairN = [0 for i in range(len(customerRepair))]
+        customerRepairB = [0 for i in range(len(customerRepair))]
+        
+        customerRhoR=[1/len(customerRepair) for i in range(len(customerRepair))]
+    
+        stationDestroy = [self.destroyRandomCharge,self.destroyAllCharge] # destroy methods
+        stationRepair = [self.repairInsertCCharge,self.repairInsertNCCharge,self.repairInsertAllCharge,\
+                  self.repairInsertNCandCCharge] # repair methods
+        stationRhoD=[1/len(stationDestroy) for i in range(len(stationDestroy))] # weight vector of destroy methods
+        stationDestroyN=[0 for i in range(len(stationDestroy))] # number of times station destroy is chosen
+        stationDestroyB=[0 for i in range(len(stationDestroy))] # number of times station destroy leads to best solution
+        
+        stationRhoR=[1/len(stationRepair) for i in range(len(stationRepair))] # weight vector of repair methods
+        stationRepairN=[0 for i in range(len(stationRepair))] # number of times station reair is chosen
+        stationRepairB=[0 for i in range(len(stationRepair))] # number of times it leads to best solution
+        
+        numIter=0
+        scores=[]
+        scores.append((numIter,bestScore)) # first observation
+        bestScores=[]
+        startTime = perf_counter()
+        bestScores.append((numIter,bestScore,perf_counter()-startTime))
+        infeasibleCount=0
+        s_n=int(self.hyperparams.get('b',5))
+        #DEBUG
+        scorealns=[]
+        scorenormal=[]
+        while perf_counter()-startTime<=solTime: # solTime is passed as the time available to provide a solution
+            self.setAGVInfo()# reset the information about AGVs
+            selD = np.random.choice(customerDestroy,p=customerRhoD) #select destroy method
+            selR = np.random.choice(customerRepair, p=customerRhoR) #select repair method
+            selD() #destroy
+            customerIndexD=customerDestroy.index(selD) #record index of destroy method
+            customerDestroyN[customerIndexD]+=1 #inc. by 1
+            selR() # repair
+            customerIndexR=customerRepair.index(selR) #record repair method index
+            customerRepairN[customerIndexR]+=1 # inc.
+            self.fixChargeOrganiseTaskList()#fix tasklist  
+            newScore = self.getGreedyTaskListScore()
+            scores.append((numIter,newScore))
+            
+            if newScore<bestScore:
+                bestTL=copy.deepcopy(self.taskList)#copy tasklist
+                bestScore=newScore
+                bestScores.append((numIter,bestScore,perf_counter()-startTime))
+                self.updateWeightVectors(rhoD= customerRhoD, rhoR=customerRhoR, indexD=customerIndexD, indexR=customerIndexR, lambdaX=lambdaP, psiX=psi1)
+                customerDestroyB[customerIndexD]+=1
+                customerRepairB[customerIndexR]+=1
+                bestFound = False
+                s_i=0
+                stationxtl = copy.deepcopy(self.taskList)
+                while bestFound or s_i<=s_n:
+                    self.setAGVInfo()# reset the information about AGVs
+                    agv = np.random.choice(self.agvs) 
+                    selD = np.random.choice(stationDestroy,p=stationRhoD)
+                    stationIndexD = stationDestroy.index(selD) # index of destroy method
+                    stationDestroyN[stationIndexD]+=1
+                    selR = np.random.choice(stationRepair,p=stationRhoR) 
+                    stationIndexR = stationRepair.index(selR) # index of repair method
+                    stationRepairN[stationIndexR]+=1
+                    selD(agv) # destroy agv sequence
+                    selR(agv) # repair agv sequence
+                    isStationMethod=True
+                    self.fixChargeOrganiseTaskList()#fix tasklist
+                    newScore = self.getGreedyTaskListScore()
+                    scores.append((numIter,newScore))
+                    if newScore < bestScore:
+                        s_i=0
+                        bestTL=copy.deepcopy(self.taskList)#copy tasklist
+                        stationxtl = copy.deepcopy(self.taskList)
+                        bestScore=newScore
+                        stationDestroyB[stationIndexD]+=1
+                        stationRepairB[stationIndexR]+=1
+                        bestScores.append((numIter,bestScore,perf_counter()-startTime))
+                        self.updateWeightVectors(rhoD= stationRhoD, rhoR=stationRhoR, indexD=stationIndexD, indexR=stationIndexR, lambdaX=lambdaP, psiX=psi1)
+                        bestFound=True
+                        
+                    elif newScore<currentScore:
+                        currentScore=newScore
+                        bestFound=False
+                        self.updateWeightVectors(rhoD= stationRhoD, rhoR=stationRhoR, indexD=stationIndexD, indexR=stationIndexR, lambdaX=lambdaP, psiX=psi2)
+                        self.taskList = copy.deepcopy(stationxtl)
+                        s_i+=1
+                        
+                    else:
+                        bestFound=False
+                        s_i+=1
+                        self.taskList = copy.deepcopy(stationxtl)
+                        self.updateWeightVectors(rhoD= stationRhoD, rhoR=stationRhoR, indexD=stationIndexD, indexR=stationIndexR, lambdaX=lambdaP, psiX=psi3)           
+            elif newScore<currentScore:
+                currentScore=newScore
+                self.updateWeightVectors(rhoD=customerRhoD,rhoR=customerRhoR,indexD=customerIndexD, indexR=customerIndexR, lambdaX=lambdaP, psiX=psi2)
+            else:
+                currentScore=newScore
+                self.updateWeightVectors(rhoD=customerRhoD,rhoR=customerRhoR,indexD=customerIndexD, indexR=customerIndexR, lambdaX=lambdaP, psiX=psi3)
+                        
+            
+            #self.createTaskSequence()
+            #self.solveLP()
+            #scorealns.append(self.getScoreALNS())
+            #scorenormal.append(self.getGreedyTaskListScore())
+            numIter+=1                
+        
+        self.taskList=bestTL
+        self.createTaskSequence()
+        self.solveLP()
+        solution={'numIter':numIter,
+                  'stationDestroyN':stationDestroyN,
+                  'stationRepairN':stationRepairN,
+                  'scores':scores,
+                  'bestScores':bestScores,
+                  'stationDestroyB':stationDestroyB,
+                  'stationRepairB':stationRepairB,
+                  'customerDestroyN':customerDestroyN,
+                  'customerRepairN':customerRepairN,
+                  'customerDestroyB':customerDestroyB,
+                  'customerRepairB':customerRepairB,
+                  'methodN':None,
+                  }
+        return solution
+    
+    def alns4(self, solTime):
+        '''
+        Adaptive Large Neighborhood Search
+        TODO: See the effect of adding a Deep Neural Net to initialize initial weights of destroy and repair methods
+        '''
+        print('method 4 executed')
+        psi1 = self.hyperparams.get('psi1',0.9) # if new solution is new global best
+        psi2 = self.hyperparams.get('psi2',0.6) # if new solution is better than current solution but not the best
+        psi3 = self.hyperparams.get('psi3',0.3) # if new solution is accepted
+        lambdaP = self.hyperparams.get('lambdaP',0.5) # lambda parameter to cont
+        
+        
+        bestTL = copy.deepcopy(self.taskList)
+        bestScore = self.getScoreALNS()
+        
+        currentScore = bestScore
+        #print(f'Best Score at the start:{bestScore}')
+        '''
+        Initialize set of destroy and repair methods, initialize weights of respective methods
+        '''
+        customerDestroy = [self.destroyShaw,self.destroyShawDistance,self.destroyShawTime,self.destroyShawCapability,\
+                          self.destroyRandomTasks,self.destroyWorstTardinessCustomers]
+        customerRepair = [self.repairKRegret,self.repairInsertGreedyTask,self.repairGreedyEDDInsert]
+        
+        customerRhoD=[1/len(customerDestroy) for i in range(len(customerDestroy))]
+        customerDestroyN = [0 for i in range(len(customerDestroy))]
+        customerDestroyB= [0 for i in range(len(customerDestroy))]
+        customerRepairN = [0 for i in range(len(customerRepair))]
+        customerRepairB = [0 for i in range(len(customerRepair))]
+        
+        customerRhoR=[1/len(customerRepair) for i in range(len(customerRepair))]
+    
+        stationDestroy = [self.destroyRandomCharge,self.destroyAllCharge, self.destroyWorstCharge] # destroy methods
+        stationRepair = [self.repairInsertCCharge,self.repairInsertNCCharge,self.repairInsertAllCharge,\
+                  self.repairInsertNCandCCharge] # repair methods
+        stationRhoD=[1/len(stationDestroy) for i in range(len(stationDestroy))] # weight vector of destroy methods
+        stationDestroyN=[0 for i in range(len(stationDestroy))] # number of times station destroy is chosen
+        stationDestroyB=[0 for i in range(len(stationDestroy))] # number of times station destroy leads to best solution
+        
+        stationRhoR=[1/len(stationRepair) for i in range(len(stationRepair))] # weight vector of repair methods
+        stationRepairN=[0 for i in range(len(stationRepair))] # number of times station reair is chosen
+        stationRepairB=[0 for i in range(len(stationRepair))] # number of times it leads to best solution
+        
+        numIter=0
+        scores=[]
+        scores.append((numIter,bestScore)) # first observation
+        bestScores=[]
+        startTime = perf_counter()
+        bestScores.append((numIter,bestScore,perf_counter()-startTime))
+        s_n=int(self.hyperparams.get('b',5))
+        #DEBUG
+       
+        
+        while perf_counter()-startTime<=solTime: # solTime is passed as the time available to provide a solution
+            self.setAGVInfo()# reset the information about AGVs
+            selD = np.random.choice(customerDestroy,p=customerRhoD) #select destroy method
+            selR = np.random.choice(customerRepair, p=customerRhoR) #select repair method
+            selD() #destroy
+            customerIndexD=customerDestroy.index(selD) #record index of destroy method
+            customerDestroyN[customerIndexD]+=1 #inc. by 1
+            selR() # repair
+            customerIndexR=customerRepair.index(selR) #record repair method index
+            customerRepairN[customerIndexR]+=1 # inc.
+            self.createTaskSequence()
+            self.solveLP()
+            newScore = self.getScoreALNS()
+            scores.append((numIter,newScore))
+            
+            if newScore<bestScore:
+                bestTL=copy.deepcopy(self.taskList)#copy tasklist
+                bestScore=newScore
+                bestScores.append((numIter,bestScore,perf_counter()-startTime))
+                self.updateWeightVectors(rhoD= customerRhoD, rhoR=customerRhoR, indexD=customerIndexD, indexR=customerIndexR, lambdaX=lambdaP, psiX=psi1)
+                customerDestroyB[customerIndexD]+=1
+                customerRepairB[customerIndexR]+=1
+                bestFound = False
+                s_i=0
+                stationxtl = copy.deepcopy(self.taskList)
+                while bestFound or s_i<=s_n:
+                    self.setAGVInfo()# reset the information about AGVs
+                    agv = np.random.choice(self.agvs) 
+                    selD = np.random.choice(stationDestroy,p=stationRhoD)
+                    stationIndexD = stationDestroy.index(selD) # index of destroy method
+                    stationDestroyN[stationIndexD]+=1
+                    selR = np.random.choice(stationRepair,p=stationRhoR) 
+                    stationIndexR = stationRepair.index(selR) # index of repair method
+                    stationRepairN[stationIndexR]+=1
+                    selD(agv) # destroy agv sequence
+                    selR(agv) # repair agv sequence
+                    isStationMethod=True
+                    self.createTaskSequence()
+                    self.solveLP()
+                    newScore = self.getScoreALNS()
+                    scores.append((numIter,newScore))
+                    if newScore < bestScore:
+                        s_i=0
+                        bestTL=copy.deepcopy(self.taskList)#copy tasklist
+                        stationxtl = copy.deepcopy(self.taskList)
+                        bestScore=newScore
+                        stationDestroyB[stationIndexD]+=1
+                        stationRepairB[stationIndexR]+=1
+                        bestScores.append((numIter,bestScore,perf_counter()-startTime))
+                        self.updateWeightVectors(rhoD= stationRhoD, rhoR=stationRhoR, indexD=stationIndexD, indexR=stationIndexR, lambdaX=lambdaP, psiX=psi1)
+                        bestFound=True
+                        
+                    elif newScore<currentScore:
+                        currentScore=newScore
+                        bestFound=False
+                        self.updateWeightVectors(rhoD= stationRhoD, rhoR=stationRhoR, indexD=stationIndexD, indexR=stationIndexR, lambdaX=lambdaP, psiX=psi2)
+                        self.taskList = copy.deepcopy(stationxtl)
+                        s_i+=1
+                        
+                    else:
+                        bestFound=False
+                        s_i+=1
+                        self.taskList = copy.deepcopy(stationxtl)
+                        self.updateWeightVectors(rhoD = stationRhoD, rhoR=stationRhoR, indexD=stationIndexD, indexR=stationIndexR, lambdaX=lambdaP, psiX=psi3)           
+            elif newScore<currentScore:
+                currentScore=newScore
+                self.updateWeightVectors(rhoD=customerRhoD,rhoR=customerRhoR,indexD=customerIndexD, indexR=customerIndexR, lambdaX=lambdaP, psiX=psi2)
+            else:
+                currentScore=newScore
+                self.updateWeightVectors(rhoD=customerRhoD,rhoR=customerRhoR,indexD=customerIndexD, indexR=customerIndexR, lambdaX=lambdaP, psiX=psi3)
+                        
+            
+            
+            numIter+=1                
+        
+        self.taskList=bestTL
+        self.createTaskSequence()
+        self.solveLP(requireConflictFree=False)
+        solution={'numIter':numIter,
+                  'stationDestroyN':stationDestroyN,
+                  'stationRepairN':stationRepairN,
+                  'scores':scores,
+                  'bestScores':bestScores,
+                  'stationDestroyB':stationDestroyB,
+                  'stationRepairB':stationRepairB,
+                  'customerDestroyN':customerDestroyN,
+                  'customerRepairN':customerRepairN,
+                  'customerDestroyB':customerDestroyB,
+                  'customerRepairB':customerRepairB,
+                  'methodN':None,
+                  }
+        return solution
+    
+    def updateWeightVectors(self,rhoD,rhoR,indexD, indexR, lambdaX, psiX, runtimeD=0.01, runtimeR=0.01):
+        runtimeD = 0.6 if runtimeD<0.001 else 1.4 if runtimeD>0.01 else 1
+        runtimeR = 0.6 if runtimeD<0.001 else 1.4 if runtimeD>0.01 else 1
+        rhoD[indexD]= lambdaX*rhoD[indexD]+(1-lambdaX)*(psiX/runtimeD)
+        rhoR[indexR]= lambdaX*rhoR[indexR]+(1-lambdaX)*(psiX/runtimeR)
         rhoD[:]=[val/sum(rhoD) for val in rhoD]
         rhoR[:]=[val/sum(rhoR) for val in rhoR]
+        
     
 #KPI and other functionalities
+
+    def getGreedyTaskListScore(self, alpha=0.5):
+        alpha = self.hyperparams.get('alpha',0.5)
+        tardinessTimeCost=0
+        totalTTCost=0
+        totalTT=0
+        for key in self.taskList.keys():
+            a = self.getAgvById(key)
+            chargeRate = a.getChargeRate()
+            dischargeRate = a.getDischargeRate()
+            agvSpeed = a.getSpeed()
+            currentNode = a.startNode
+            currentCharge = a.charge
+            runTime=0
+            taskList = self.taskList.get(key)
+            for n,task in enumerate(taskList):
+                if task.taskType=='C':
+                    nearestChargeNode = self.getNearestChargeLocation(currentNode)      
+                    unloadedTT=self.layout.getDistanceFromNode(currentNode,nearestChargeNode)*(1/agvSpeed)
+                    loadedTT=0
+                    currentCharge-=dischargeRate*unloadedTT
+                    reqdCharge=0
+                    currentNodeC=nearestChargeNode
+                    for t in range(n+1, len(taskList)):
+                        if taskList[t].taskType!='C':
+                            unloadedTTC=self.layout.getDistanceFromNode(currentNodeC,taskList[t].source)*(1/agvSpeed)
+                            loadedTTC=self.layout.getDistanceFromNode(taskList[t].source,taskList[t].dest)*(1/agvSpeed)
+                            currentNodeC=taskList[t].dest
+                            reqdCharge+=dischargeRate*(unloadedTTC+loadedTTC)
+                        else: break;
+                    runTime+=unloadedTT+min(reqdCharge,100-currentCharge)/chargeRate
+                    currentNode=nearestChargeNode
+                    currentCharge+=reqdCharge
+                    currentCharge=min(currentCharge,100)
+                    tardinessTimeCost=0
+                else:
+                    unloadedTT=self.layout.getDistanceFromNode(currentNode,task.source)*(1/agvSpeed)
+                    loadedTT=self.layout.getDistanceFromNode(task.source,task.dest)*(1/agvSpeed)
+                    currentCharge-=dischargeRate*(unloadedTT+loadedTT)
+                    if runTime<task.ept:
+                        currentCharge+=(task.ept-unloadedTT-runTime)/chargeRate if n>0 and taskList[n-1].taskType=='C' else currentCharge
+                        currentCharge=min(currentCharge,100)
+                        runTime=task.ept-unloadedTT
+                    runTime+=unloadedTT+self.getMhtById(task.source)+loadedTT+self.getMhtById(task.dest)
+                    currentNode=task.dest
+                    tardinessTimeCost+=max(0,(runTime-task.ldt)*task.requestCost)
+                totalTT=unloadedTT+loadedTT
+                totalTTCost+=(totalTT*a.travelCost)
+        #print(f'tardiness:{tardinessTime},unloadedTravelTime:{totalUnloadedTime}, score:{alpha*tardinessTime+(1-alpha)*totalUnloadedTime}')
+        return alpha*tardinessTimeCost+(1-alpha)*totalTTCost
 
     def getTaskfromTaskScheduleByIndex(self, index, agv):
         '''
@@ -914,46 +1618,123 @@ class Scheduler():
         '''
         taskSchedule = self.taskSchedule if taskSchedule is None else taskSchedule
         tardiness=0
-        unloadedTravel=0
-        unloadedTravelTime=0
-        unloadedTravelTimeCost=0
+        tardinessCost = 0
+        otd=0
+        numTRs=0
+        ult=0
+        lt=0
+        totalTravel=0
+        totalTravelTime=0
+        totalTravelTimeCost=0
         for a,agv in enumerate(self.agvs):
+            t=0 #
             for r,req in enumerate(taskSchedule.get(a)):
-                if req.get('taskType')=='C' or req.get('taskType')=='UT':
-                    unloadedTravel += self.layout.getDistanceFromNode(req['source'],req['dest'])
-                elif req.get('taskType')=='TO':
+                t += self.layout.getDistanceFromNode(req['source'],req['dest'])
+                if req.get('taskType')=='TO':
+                    numTRs+=1 #track otd
                     tardiness += max(0, req['D']-req['ldt'])
-            unloadedTravelTime+=unloadedTravel/agv.speed
-            unloadedTravelTimeCost=unloadedTravelTime*agv.travelCost
+                    tardinessCost = tardiness * req['requestCost']
+                    lt+=self.layout.getDistanceFromNode(req['source'], req['dest'])
+                    if req['D'] <= req['ldt']:
+                        otd+=1
+                else:
+                    ult+=self.layout.getDistanceFromNode(req['source'],req['dest'])
+            totalTravel+=t
+            totalTravelTime+=(t/agv.speed)
+            totalTravelTimeCost+=((t*agv.travelCost)/agv.speed)
+        sla = (otd/numTRs)
         
-        return tardiness,unloadedTravel,unloadedTravelTime,unloadedTravelTimeCost
+        return tardiness,tardinessCost,totalTravel,lt,ult,totalTravelTime,totalTravelTimeCost, sla
     
-    def getScoreALNS(self,taskSchedule, alpha=0.5):
+    def getScoreALNS(self,taskSchedule=None, alpha=0.5):
         '''
         returns score of a schedule, used in alns algorithm
         '''
-        tardiness,_,_,unloadedTravelCost = self.getScheduleKPI(taskSchedule)
-        return (alpha*tardiness + (1-alpha)*(unloadedTravelCost))
+        alpha = self.hyperparams.get('alpha',0.5)
+        _,tardinessCost,_,_,_,_,totalTravelCost,_ = self.getScheduleKPI(taskSchedule)
+        return (alpha*tardinessCost + (1-alpha)*(totalTravelCost))
         
     
     def writeScheduleToFile(self):
         '''
         Writes schedule in a text/excel file and visualizes the schedule
-        '''
         
-        pass
-
-
-if __name__== '__main__':
-    start=time()
-    scheduler = Scheduler(layoutFile='outputDM.csv', agvFile='agvs.xlsx', requestFile='transportOrders2.xlsx', \
-                        stationFile='stations.xlsx')
-    scheduler.createGreedySequence()
-    scheduler.createTaskSequence()
-    scheduler.solveLP(printOutput=False)
-
-    end = time()
-    print(f'time:{end-start}')
-    scheduler.getScheduleKPI()
-    bestSol,bestScore,numIter, destroyN,repairN,scores,bestScores,destroyB,repairB,destroyI,repairI = scheduler.alns(5)
+        '''
+        scheduleDf = pd.DataFrame(columns=['Id', 'source', 'target', 'ept', 'ldt', 'capability', 'requestCost', 'S', 'D', 'B', 'tardiness', 'assignedAGV'])
+        
+        for agv, schedule in self.taskSchedule.items():
+            for task in schedule:
+                row={}
+                row['Id'] = task['taskId']
+                row['source'] = task['source']
+                row['target'] = task['dest']
+                row['S'] = task['S']
+                row['D'] = task['D']
+                row['B'] = task['B']
+                row['assignedAGV']=agv
+                if task['taskType']=='TO':
+                    row['ept'] = task['ept']
+                    row['ldt'] = task['ldt']
+                    row['requestCost'] = task['requestCost']
+                    row['tardiness'] = int(max(0,task['D']-task['ldt']))
+                    
+                scheduleDf=scheduleDf.append(row, ignore_index=True)
+            
+                
+        scheduleDf.to_excel('schedule.xlsx', sheet_name='schedule')
+        
+    def getScheduleCostAnalysis(self):
+        scheduleDf = pd.DataFrame(columns=['Id', 'source', 'target', 'ept', 'ldt', 'capability', 'requestCost', 'S', 'D', 'B', 'tardiness', 'assignedAGV'])
+        
+        for agv, schedule in self.taskSchedule.items():
+            for task in schedule:
+                row={}
+                row['Id'] = task['taskId']
+                row['source'] = task['source']
+                row['target'] = task['dest']
+                row['S'] = task['S']
+                row['D'] = task['D']
+                row['B'] = task['B']
+                row['assignedAGV']=agv
+                if task['taskType']=='TO':
+                    row['ept'] = task['ept']
+                    row['ldt'] = task['ldt']
+                    row['requestCost'] = task['requestCost']
+                    row['tardiness'] = int(max(0,task['D']-task['ldt']))
+                    
+                scheduleDf=scheduleDf.append(row, ignore_index=True)
+            
+        typesOfVehicles = scheduleDf['assignedAGV'].unique()
+        typesOfRequests=set()
+        agvStat = {}
+        for agv,schedule in self.taskSchedule.items():
+            agvTotalTravel = 0
+            for task in schedule:
+                if task['taskType']=='TO':
+                    typesOfRequests.add(task['requestCost'])
+                agvTotalTravel+=self.layout.getDistanceFromNode(task['source'], task['dest'])
+            agvStat[agv] = agvTotalTravel
+                    
+        reqStat = {}
+        
+        for request in typesOfRequests:
+            reqStat[request]=scheduleDf[scheduleDf['requestCost']==request]['tardiness'].sum()
+        
+        return reqStat, agvStat
+        
+        
     
+    
+    def solve(self, runtime):
+        method = self.hyperparams.get('alnsMethod',4)
+        #print(method)
+        self.createGreedySequence()
+        self.createTaskSequence()
+        self.solveLP(printOutput=False)
+        solution =self.alns(runtime) if method==0 else self.alns1(runtime) if method==1 else \
+        self.alns2(runtime) if method==2 else self.alns3(runtime) if method==3 else self.alns4(runtime)
+        
+        return solution
+    
+    
+        

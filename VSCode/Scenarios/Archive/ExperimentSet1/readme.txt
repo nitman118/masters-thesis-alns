@@ -1,0 +1,9 @@
+reqCap = ['A,B', 'B','E','C,D']
+    fos = 3 # factor of safety for time-window
+    requestCosts = [1] # 1 - non-critical task, 10-critical tasks
+    maxLayoutDistance = 308 * fos #meters
+    minSpeed = 1 #m/sec
+    timeHorizons = [1800,3600,7200] # 30 mins, 60 mins, 2 hours, [1800,3600,7200] 
+    tws= [0.5,0.8] # prob of tight time-windows, [0.2,0.5,0.8]
+    numJobs = [20,40,60] # [20,40,60]
+    agvFleetCases = [3,6,9] 

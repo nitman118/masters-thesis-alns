@@ -1,0 +1,9 @@
+https://www.kaggle.com/willkoehrsen/intro-to-model-tuning-grid-and-random-search
+
+procedure - file:///C:/Users/nitis/OneDrive%20-%20TU%20Eindhoven/TUEindhoven/Thesis/Phase%20II/Partial%20recharge%20strategies%20for%20the%20electric%20vehicle%20routing%20problem%20with%20time%20windows.pdf
+
+hyperopt - http://hyperopt.github.io/hyperopt/
+
+tut - https://towardsdatascience.com/an-introductory-example-of-bayesian-optimization-in-python-with-hyperopt-aae40fff4ff0,https://towardsdatascience.com/automated-machine-learning-hyperparameter-tuning-in-python-dfda59b72f8a
+
+random search - http://www.jmlr.org/papers/volume13/bergstra12a/bergstra12a.pdf

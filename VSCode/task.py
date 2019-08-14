@@ -7,12 +7,13 @@ Unloaded Travel Task
 '''
 class Task():
     
-    def __init__(self, taskId, taskType, source, dest):
+    def __init__(self, taskId, taskType, source, dest, cost =1):
         self.taskId=taskId #this is the original id of the request from the file
         self.taskIndex=888 #this is changed based on order of tasks, use this to locate charge tasks
         self.taskType = taskType
         self.source = source
         self.dest = dest
+        
         
     def __repr__(self):
         return f"{self.taskId}-{self.taskType}-{self.source}-{self.dest}"
@@ -26,11 +27,12 @@ class Task():
 '''
 This class represents an inherited object(Transport Order) of a TASK'''
 class TransportOrder(Task):
-    def __init__(self,taskId, taskType, source, dest, ept, ldt, cap):
+    def __init__(self,taskId, taskType, source, dest, ept, ldt, cap,requestCost):
         super().__init__(taskId, taskType, source, dest) #call 'Task' class constructor
         self.ept = ept
         self.ldt = ldt
         self.cap = cap
+        self.requestCost = requestCost
         
     def __repr__(self):
         return f"{self.taskId}-{self.taskType}-{self.source}-{self.dest}-{self.ept}-{self.ldt}-{self.cap}"
